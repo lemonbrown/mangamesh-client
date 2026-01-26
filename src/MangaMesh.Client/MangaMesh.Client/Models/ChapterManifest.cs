@@ -16,6 +16,6 @@ namespace MangaMesh.Client.Models
         public IReadOnlyList<BlobHash> Pages { get; init; } = [];
         public string? SignedBy { get; init; }
         public string? Signature { get; init; }
+        public ReleaseLineId ReleaseLine { get; set; }
     }
-
 }
