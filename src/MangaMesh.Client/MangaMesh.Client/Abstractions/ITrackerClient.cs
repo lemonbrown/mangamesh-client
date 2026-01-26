@@ -12,5 +12,8 @@ namespace MangaMesh.Client.Abstractions
         Task<List<PeerInfo>> GetPeersForManifestAsync(string manifestHash);
         Task<bool> AnnounceAsync(string nodeId, string ip, int port, List<string> manifestHashes);
 
+        public Task AnnounceManifestAsync(
+         ManifestAnnouncement announcement,
+         CancellationToken ct = default);
     }
 }

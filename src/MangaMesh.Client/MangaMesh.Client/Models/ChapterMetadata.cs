@@ -8,10 +8,19 @@ namespace MangaMesh.Client.Models
 {
     public sealed record ChapterMetadata
     {
-        public string SeriesId { get; init; } = "";
-        public int ChapterNumber { get; init; }
-        public string Language { get; init; } = "en";
-        public string? ClaimedScanGroup { get; init; }
-        public List<string> PageFiles { get; init; } = new(); // Optional: filenames override auto-scan
+        public required ReleaseLineId ReleaseLine { get; init; }
+        public required int ChapterNumber { get; init; }
+        public required string ManifestHash { get; init; }
+
+        public string? Title { get; init; }
+        public DateTime PublishedAtUtc { get; init; }
+
+        // Optional trust info
+        public string? SigningKeyId { get; init; }
+        public string? Signature { get; init; }
+
+        public ReleaseType ReleaseType { get; init; }
+
+        public ReleaseIdentity Identity { get; init; } = new();
     }
 }

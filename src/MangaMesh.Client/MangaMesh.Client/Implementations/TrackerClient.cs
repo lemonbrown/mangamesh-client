@@ -13,9 +13,9 @@ namespace MangaMesh.Client.Implementations
     {
         private readonly HttpClient _httpClient;
 
-        public TrackerClient(string trackerBaseUrl)
+        public TrackerClient(HttpClient http)
         {
-            _httpClient = new HttpClient { BaseAddress = new Uri(trackerBaseUrl) };
+            _httpClient = http;
         }
 
         /// <summary>
@@ -40,6 +40,28 @@ namespace MangaMesh.Client.Implementations
             response.EnsureSuccessStatusCode();
 
             return true;
+        }
+
+        public async Task AnnounceManifestAsync(
+             ManifestAnnouncement announcement,
+             CancellationToken ct = default)
+        {
+            var response = await _httpClient.PostAsJsonAsync(
+                "/api/tracker/announce",
+                announcement,
+                ct);
+
+            if (response.IsSuccessStatusCode)
+                return;
+
+            // Duplicate announcement is OK (idempotent)
+            if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
+                return;
+
+            var error = await response.Content.ReadAsStringAsync(ct);
+
+            throw new InvalidOperationException(
+                $"Tracker announce failed ({response.StatusCode}): {error}");
         }
     }
 }

@@ -9,6 +9,8 @@ namespace MangaMesh.Client.Abstractions
 {
     public interface IManifestStore
     {
+
+        public Task SaveAsync(ManifestHash hash, ChapterManifest manifest);
         Task<ManifestHash> PutAsync(ChapterManifest manifest);
         Task<ChapterManifest?> GetAsync(ManifestHash hash);
         Task<bool> ExistsAsync(ManifestHash manifestHash);

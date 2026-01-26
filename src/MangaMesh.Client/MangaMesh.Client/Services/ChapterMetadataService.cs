@@ -34,18 +34,18 @@ namespace MangaMesh.Client.Services
                 throw new InvalidOperationException("Failed to deserialize chapter metadata.");
 
             // If PageFiles not provided, auto-scan folder
-            if (metadata.PageFiles.Count == 0)
-            {
-                var imageFiles = Directory.GetFiles(folderPath, "*.*")
-                    .Where(f => f.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
-                             || f.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
-                             || f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
-                    .Select(Path.GetFileName)
-                    .OrderBy(f => f)
-                    .ToList();
+            //if (metadata.PageFiles.Count == 0)
+            //{
+            //    var imageFiles = Directory.GetFiles(folderPath, "*.*")
+            //        .Where(f => f.EndsWith(".webp", StringComparison.OrdinalIgnoreCase)
+            //                 || f.EndsWith(".png", StringComparison.OrdinalIgnoreCase)
+            //                 || f.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase))
+            //        .Select(Path.GetFileName)
+            //        .OrderBy(f => f)
+            //        .ToList();
 
-                metadata = metadata with { PageFiles = imageFiles };
-            }
+            //    metadata = metadata with { PageFiles = imageFiles };
+            //}
 
             return metadata;
         }

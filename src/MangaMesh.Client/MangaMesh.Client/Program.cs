@@ -20,72 +20,32 @@ Console.WriteLine("Enter Chapter Location: ");
 
 var chapterPathLocation = Console.ReadLine();
 
-var blobStore = new BlobStore(root);
-
-var manifestStore = new ManifestStore(root);
-
-var importChapterService = new ImportChapterService(blobStore, manifestStore);
-
-var chapterMetadataService = new ChapterMetadataService();
-
-if (!string.IsNullOrWhiteSpace(chapterPathLocation))
-{
-
-    var metadata = await chapterMetadataService.LoadMetadataAsync(chapterPathLocation);
-
-    Console.WriteLine($"Found Chapter Metadata [{metadata.SeriesId}] chapter [{metadata.ChapterNumber}]");
-
-    // Build the chapter manifest
-    var manifest = new ChapterManifest
-    {
-        ManifestVersion = 1,
-        SeriesId = metadata.SeriesId,
-        ChapterNumber = metadata.ChapterNumber,
-        Language = metadata.Language,
-        ClaimedScanGroup = metadata.ClaimedScanGroup
-    };
-
-    await importChapterService.ImportChapterAsync(chapterPathLocation, manifest);
-
-    Console.WriteLine($"Import complete");
-
-}
-else
-{
-    Console.WriteLine("Skipping import...");
-}
-
-var trackerClient = new TrackerClient(trackerUrl);
-
-Console.WriteLine("Announcing node...");
-
-Console.WriteLine($"Announcing to [{trackerUrl}]");
-
-var announcementResponse = await trackerClient.AnnounceAsync(
-    nodeId: "node123",
-    ip: "192.168.1.100",
-    port: 5000,
-    manifestHashes: new List<string> {}
-);
-
-Console.WriteLine($"Announcement complete [success]");
-
-Console.WriteLine("Querying peers for manifests...");
-
-// Query peers for a manifest
-var peers = await trackerClient.GetPeersForManifestAsync("abc123");
-foreach (var peer in peers)
-{
-    Console.WriteLine($"Peer: {peer.NodeId} at {peer.IP}:{peer.Port}");
-}
-
 var builder = new HostBuilder().ConfigureServices(services =>
 {
+    services
+    .AddLogging(n => n.AddConsole())
+    .AddScoped<ITrackerClient, TrackerClient>()
+    .AddScoped<IPeerFetcher, PeerFetcher>()
+    .AddSingleton<ISubscriptionStore>(
+        _ => new FileSubscriptionStore("data/subscriptions.json"))
+    .AddScoped<IManifestStore, ManifestStore>()
+    .AddSingleton<IBlobStore>(new BlobStore(root))
+    .AddSingleton<IManifestStore>(new ManifestStore(root));
+
+    services.AddHttpClient<IMetadataClient, HttpMetadataClient>(client =>
+    {
+        client.BaseAddress = new Uri("https://metadata.mangamesh.net");
+    });
+
+    services.AddHttpClient<ITrackerClient, TrackerClient>(client =>
+    {
+        client.BaseAddress = new Uri(trackerUrl);
+    });
     services.AddHostedService(provider =>
         new ReplicationService(
             tracker: provider.GetRequiredService<ITrackerClient>(),
             fetcher: provider.GetRequiredService<IPeerFetcher>(),
-            subscriptions: provider.GetRequiredService<ISubscriptionStore>(),
+            subscriptionStore: provider.GetRequiredService<ISubscriptionStore>(),
             manifests: provider.GetRequiredService<IManifestStore>(),
             metadata: provider.GetRequiredService<IMetadataClient>(),
             logger: provider.GetRequiredService<ILogger<ReplicationService>>(),

@@ -17,5 +17,6 @@ namespace MangaMesh.Client.Models
         public string? SignedBy { get; init; }
         public string? Signature { get; init; }
         public ReleaseLineId ReleaseLine { get; set; }
+        public List<string> FilePaths { get; internal set; }
     }
 }

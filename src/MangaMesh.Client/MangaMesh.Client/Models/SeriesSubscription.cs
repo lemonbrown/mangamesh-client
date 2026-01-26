@@ -8,7 +8,10 @@ namespace MangaMesh.Client.Models
 {
     public record SeriesSubscription
     {
-        public string SeriesId { get; init; } = "";
+        public string SeriesId { get; set; } = "";
+
+        public string Language { get; set; } = "";
+
         public bool AutoFetch { get; init; } = true;
     }
 

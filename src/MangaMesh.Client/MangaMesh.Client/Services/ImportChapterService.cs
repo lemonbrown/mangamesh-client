@@ -3,23 +3,28 @@ using MangaMesh.Client.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Security.Principal;
 using System.Text;
 using System.Threading.Tasks;
 
 namespace MangaMesh.Client.Services
 {
-    internal class ImportChapterService
+    public class ImportChapterService : IImportChapterService
     {
 
         private readonly IBlobStore _blobStore;
 
         private readonly IManifestStore _manifestStore;
 
-        public ImportChapterService(IBlobStore blobStore, IManifestStore manifestStore)
+        private readonly ITrackerClient _trackerClient;
+
+        public ImportChapterService(IBlobStore blobStore, IManifestStore manifestStore, ITrackerClient trackerClient)
         {
             _blobStore = blobStore;
 
-            _manifestStore = manifestStore; 
+            _manifestStore = manifestStore;
+
+            _trackerClient = trackerClient;
         }
 
         public async Task<ManifestHash> ImportChapterAsync(
@@ -27,8 +32,6 @@ namespace MangaMesh.Client.Services
             ChapterManifest template)
         {
             var pages = new List<BlobHash>();
-
-            var metadataService = new ChapterMetadataService();
 
             foreach (var file in Directory.GetFiles(folderPath).OrderBy(f => f))
             {
@@ -44,6 +47,88 @@ namespace MangaMesh.Client.Services
 
             return await _manifestStore.PutAsync(manifest);
         }
+
+        /// <summary>
+        /// Imports a chapter from a folder, creates a manifest, stores it, and publishes metadata.
+        /// </summary>
+        public async Task<ImportChapterResult> ImportAsync(ImportChapterRequest request, CancellationToken ct = default)
+        {
+            if (!Directory.Exists(request.SourceDirectory))
+                throw new DirectoryNotFoundException($"Source path not found: {request.SourceDirectory}");
+
+            // Step 1: enumerate files
+            var files = Directory.GetFiles(request.SourceDirectory)
+                .Where(f => IsImageFile(f))
+                .OrderBy(f => f)
+                .ToArray();
+
+            if (files.Length == 0)
+                throw new InvalidOperationException("No valid image files found in source folder.");
+
+            // Step 2: create chapter manifest
+            var manifest = new ChapterManifest
+            {
+                SeriesId = request.SeriesId,
+                ReleaseLine = new ReleaseLineId(request.ScanlatorId, request.SeriesId, request.Language),
+                Language = request.Language,
+                ChapterNumber = request.ChapterNumber,
+                FilePaths = files.ToList(),
+                //ReleaseLine = request.ReleaseLineOverride ?? $"{request.ScanlatorId}-{request.Language}"
+            };
+
+            // Step 3: compute hash for the manifest
+            var hash = ManifestHash.FromManifest(manifest);
+
+            var isManifestExisting = await _manifestStore.ExistsAsync(ManifestHash.FromManifest(manifest));
+
+            if (!isManifestExisting)
+            {
+                // Step 4: save manifest
+                await _manifestStore.SaveAsync(hash, manifest);
+
+                // Step 5: publish metadata to trackers
+                var metadata = new ChapterMetadata
+                {
+                    ReleaseLine = new ReleaseLineId(manifest.SeriesId, manifest.ClaimedScanGroup, manifest.Language),
+                    ChapterNumber = manifest.ChapterNumber,
+                    ManifestHash = hash.Value,
+                    ReleaseType = request.ReleaseType,
+                    Identity = new ReleaseIdentity()
+                    {
+                        ClaimedGroupId = manifest.ClaimedScanGroup,
+                        DisplayName = request.DisplayName,
+                        IsVerified = false
+                    }
+                };
+
+                await _trackerClient.AnnounceManifestAsync(new ManifestAnnouncement
+                {
+                    NodeId = _nodeId,
+                    ManifestHash = manifestHash,
+                    SeriesId = manifest.SeriesId,
+                    ChapterNumber = manifest.ChapterNumber,
+                    Language = manifest.Language,
+                    ScanlatorId = manifest.ScanlatorId,
+                    ReleaseType = manifest.ReleaseType
+                });
+                //await _metadataClient.PublishAsync(metadata, ct);
+            }          
+
+            // Step 6: return result
+            return new ImportChapterResult
+            {
+                ManifestHash = hash,
+                FileCount = files.Length,
+                AlreadyExists = isManifestExisting
+            };
+        }
+
+        private static bool IsImageFile(string path)
+        {
+            var ext = Path.GetExtension(path)?.ToLowerInvariant();
+            return ext is ".jpg" or ".jpeg" or ".png" or ".webp";
+        }
+
 
     }
 }

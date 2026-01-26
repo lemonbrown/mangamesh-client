@@ -1,5 +1,7 @@
 using MangaMesh.Client.Abstractions;
 using MangaMesh.Client.Implementations;
+using MangaMesh.Client.Services;
+using MangaMesh.Server.Services;
 
 var root = "C:\\Users\\cameron\\source\\repos\\mangamesh-client\\src\\MangaMesh.Client\\MangaMesh.Client\\bin\\Debug\\net8.0\\input";
 
@@ -14,6 +16,15 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<IBlobStore>(new BlobStore(root));
 builder.Services.AddSingleton<IManifestStore>(new ManifestStore(root));
+builder.Services.AddSingleton<ImportChapterService>();
+
+builder.Services.
+    AddScoped<MangaMesh.Server.Services.IImportChapterService, ImportChapterServiceWrapper>();
+
+builder.Services.AddHttpClient<IMetadataClient, HttpMetadataClient>(client =>
+{
+    client.BaseAddress = new Uri("https://metadata.mangamesh.net");
+});
 
 var app = builder.Build();
 

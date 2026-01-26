@@ -14,39 +14,63 @@ namespace MangaMesh.Client.Implementations
     {
         private readonly string _root;
 
-        public ManifestStore(string root)
+        public ManifestStore(string rootDirectory)
         {
-            _root = root;
+            _root = rootDirectory;
             Directory.CreateDirectory(_root);
         }
 
-        public async Task<ManifestHash> PutAsync(ChapterManifest manifest)
+        public Task<IEnumerable<ManifestHash>> GetAllHashesAsync()
         {
-            var json = JsonSerializer.Serialize(
-                manifest,
-                new JsonSerializerOptions { WriteIndented = false });
+            var files = Directory.GetFiles(_root, "*.json", SearchOption.TopDirectoryOnly);
 
-            var bytes = Encoding.UTF8.GetBytes(json);
-            var hash = Convert.ToHexString(SHA256.HashData(bytes)).ToLowerInvariant();
-            var manifestHash = new ManifestHash(hash);
+            var hashes = files
+                .Select(Path.GetFileNameWithoutExtension)
+                .Where(name => !string.IsNullOrWhiteSpace(name))
+                .Select(ManifestHash.Parse)
+                .ToList();
 
-            var path = Path.Combine(_root, $"{hash}.json");
-            if (File.Exists(path))
-                return manifestHash;
-
-            await File.WriteAllTextAsync(path, json);
-            return manifestHash;
+            return Task.FromResult<IEnumerable<ManifestHash>>(hashes);
         }
 
-        public async Task<ChapterManifest?> GetAsync(ManifestHash hash)
+        public async Task SaveAsync(ManifestHash hash, ChapterManifest manifest)
         {
-            var path = Path.Combine(_root, $"{hash.Value}.json");
+            var path = GetPath(hash);
+            var json = JsonSerializer.Serialize(manifest, JsonOptions);
+            await File.WriteAllTextAsync(path, json);
+        }
+
+        public Task<bool> ExistsAsync(ManifestHash hash)
+            => Task.FromResult(File.Exists(GetPath(hash)));
+
+        public async Task<ChapterManifest?> LoadAsync(ManifestHash hash)
+        {
+            var path = GetPath(hash);
             if (!File.Exists(path))
                 return null;
 
             var json = await File.ReadAllTextAsync(path);
-            return JsonSerializer.Deserialize<ChapterManifest>(json);
+            return JsonSerializer.Deserialize<ChapterManifest>(json, JsonOptions);
         }
+
+        private string GetPath(ManifestHash hash)
+            => Path.Combine(_root, $"{hash.Value}.json");
+
+        public Task<ManifestHash> PutAsync(ChapterManifest manifest)
+        {
+            throw new NotImplementedException();
+        }
+
+        public Task<ChapterManifest?> GetAsync(ManifestHash hash)
+        {
+            throw new NotImplementedException();
+        }
+
+        private static readonly JsonSerializerOptions JsonOptions = new()
+        {
+            PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+            WriteIndented = true
+        };
     }
 
 }

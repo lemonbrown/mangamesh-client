@@ -6,6 +6,6 @@ using System.Threading.Tasks;
 
 namespace MangaMesh.Client.Models
 {
-    public record PeerInfo(string NodeId, string IP, int Port);
+    public record PeerInfo(string NodeId, string IP, int Port, DateTime LastSeen);
 
 }
