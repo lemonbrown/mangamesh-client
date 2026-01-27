@@ -42,18 +42,18 @@ namespace MangaMesh.Client.Implementations
             return chapters ?? new List<ChapterMetadata>();
         }
 
-        public async Task PublishAsync(ChapterMetadata metadata, CancellationToken ct = default)
-        {
-            if (metadata == null) throw new ArgumentNullException(nameof(metadata));
+        //public async Task PublishAsync(ChapterMetadata metadata, CancellationToken ct = default)
+        //{
+        //    if (metadata == null) throw new ArgumentNullException(nameof(metadata));
 
-            // Announce to tracker
-            var json = JsonSerializer.Serialize(metadata);
-            var content = new StringContent(json, Encoding.UTF8, "application/json");
+        //    // Announce to tracker
+        //    var json = JsonSerializer.Serialize(metadata);
+        //    var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            // POST to tracker endpoint
-            var response = await _http.PostAsync("api/tracker/announce", content, ct);
-            response.EnsureSuccessStatusCode();
-        }
+        //    // POST to tracker endpoint
+        //    var response = await _http.PostAsync("api/tracker/announce", content, ct);
+        //    response.EnsureSuccessStatusCode();
+        //}
     }
 
 }

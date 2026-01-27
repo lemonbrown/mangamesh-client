@@ -103,15 +103,14 @@ namespace MangaMesh.Client.Services
 
                 await _trackerClient.AnnounceManifestAsync(new ManifestAnnouncement
                 {
-                    NodeId = _nodeId,
-                    ManifestHash = manifestHash,
+                    NodeId = request.NodeId,
+                    ManifestHash = hash,
                     SeriesId = manifest.SeriesId,
                     ChapterNumber = manifest.ChapterNumber,
                     Language = manifest.Language,
-                    ScanlatorId = manifest.ScanlatorId,
-                    ReleaseType = manifest.ReleaseType
+                    ScanlatorId = manifest.ReleaseLine.ScanlatorId,
+                    ReleaseType = request.ReleaseType
                 });
-                //await _metadataClient.PublishAsync(metadata, ct);
             }          
 
             // Step 6: return result

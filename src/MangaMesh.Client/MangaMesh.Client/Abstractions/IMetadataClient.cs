@@ -12,7 +12,7 @@ namespace MangaMesh.Client.Abstractions
         /// <summary>
         /// Publish metadata for a chapter to peers or trackers
         /// </summary>
-        Task PublishAsync(ChapterMetadata metadata, CancellationToken ct = default);
+        //Task PublishAsync(ChapterMetadata metadata, CancellationToken ct = default);
 
         Task<IReadOnlyList<ChapterMetadata>> GetChaptersAsync(
             ReleaseLineId releaseLine,

@@ -44,6 +44,12 @@ namespace MangaMesh.Client.Models
         public ReleaseType ReleaseType { get; set; }
 
         public string DisplayName { get; set; } = "";
+
+        /// <summary>
+        /// The node that made this import
+        /// NOTE: this probably does not live here, but will for now
+        /// </summary>
+        public string NodeId { get; set; } = "";
     }
 
 }
