@@ -16,6 +16,8 @@ export interface ImportChapterRequest {
     language: string;
     chapterNumber: number;
     sourcePath: string;
+    displayName: string;
+    releaseType: string;
 }
 
 export interface StorageStats {
@@ -50,4 +52,14 @@ export interface SeriesSearchResult {
     seedCount: number;
     chapterCount: number;
     lastUploadedAt: string; // ISO Date
+}
+
+export interface ImportedChapter {
+    seriesId: string;
+    scanlatorId: string;
+    language: string;
+    chapterNumber: number;
+    sourcePath: string;
+    displayName: string;
+    releaseType: string;
 }

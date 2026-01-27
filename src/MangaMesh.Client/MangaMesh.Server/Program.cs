@@ -7,7 +7,21 @@ var root = "C:\\Users\\cameron\\source\\repos\\mangamesh-client\\src\\MangaMesh.
 
 var builder = WebApplication.CreateBuilder(args);
 
+var trackerUrl = "https://localhost:7030";
+
+
 // Add services to the container.
+
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowAll",
+        builder =>
+        {
+            builder.AllowAnyOrigin()
+                   .AllowAnyMethod()
+                   .AllowAnyHeader();
+        });
+});
 
 builder.Services.AddControllers();
 // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
@@ -16,7 +30,7 @@ builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<IBlobStore>(new BlobStore(root));
 builder.Services.AddSingleton<IManifestStore>(new ManifestStore(root));
-builder.Services.AddSingleton<ImportChapterService>();
+builder.Services.AddScoped<ImportChapterService>();
 
 builder.Services.
     AddScoped<MangaMesh.Server.Services.IImportChapterService, ImportChapterServiceWrapper>();
@@ -24,6 +38,11 @@ builder.Services.
 builder.Services.AddHttpClient<IMetadataClient, HttpMetadataClient>(client =>
 {
     client.BaseAddress = new Uri("https://metadata.mangamesh.net");
+});
+
+builder.Services.AddHttpClient<ITrackerClient, TrackerClient>(client =>
+{
+    client.BaseAddress = new Uri(trackerUrl);
 });
 
 var app = builder.Build();
@@ -36,6 +55,8 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+app.UseCors("AllowAll");
 
 app.UseAuthorization();
 

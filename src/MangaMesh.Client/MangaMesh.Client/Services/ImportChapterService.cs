@@ -86,20 +86,7 @@ namespace MangaMesh.Client.Services
                 // Step 4: save manifest
                 await _manifestStore.SaveAsync(hash, manifest);
 
-                // Step 5: publish metadata to trackers
-                var metadata = new ChapterMetadata
-                {
-                    ReleaseLine = new ReleaseLineId(manifest.SeriesId, manifest.ClaimedScanGroup, manifest.Language),
-                    ChapterNumber = manifest.ChapterNumber,
-                    ManifestHash = hash.Value,
-                    ReleaseType = request.ReleaseType,
-                    Identity = new ReleaseIdentity()
-                    {
-                        ClaimedGroupId = manifest.ClaimedScanGroup,
-                        DisplayName = request.DisplayName,
-                        IsVerified = false
-                    }
-                };
+                // Step 5: publish manifest to trackers
 
                 await _trackerClient.AnnounceManifestAsync(new ManifestAnnouncement
                 {

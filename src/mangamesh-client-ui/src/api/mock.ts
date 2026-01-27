@@ -1,4 +1,4 @@
-import type { NodeStatus, Subscription, StorageStats, ChapterSummary, ChapterMetadata, SeriesSearchResult } from '../types/api';
+import type { NodeStatus, Subscription, StorageStats, ChapterSummary, ChapterMetadata, SeriesSearchResult, ImportedChapter } from '../types/api';
 
 export const mockNodeStatus: NodeStatus = {
     nodeId: "mock-node-12345",
@@ -195,6 +195,43 @@ export const mockApi = {
                 );
                 resolve(results);
             }, 300); // Fast mock search
+        });
+    },
+
+    getImportedChapters: async (): Promise<ImportedChapter[]> => {
+        return new Promise(resolve => {
+            setTimeout(() => {
+                const imported: ImportedChapter[] = [
+                    {
+                        seriesId: "one-piece",
+                        scanlatorId: "tcb-scans",
+                        language: "en",
+                        chapterNumber: 1110,
+                        sourcePath: "C:\\Users\\cameron\\Documents\\mangamesh-test-chapters\\one-piece\\chapter-1110",
+                        displayName: "One Piece 1110",
+                        releaseType: "manual"
+                    },
+                    {
+                        seriesId: "jujutsu-kaisen",
+                        scanlatorId: "tcb-scans",
+                        language: "en",
+                        chapterNumber: 255,
+                        sourcePath: "C:\\Users\\cameron\\Documents\\mangamesh-test-chapters\\jjk\\chapter-255",
+                        displayName: "JJK 255",
+                        releaseType: "auto"
+                    },
+                    {
+                        seriesId: "chainsaw-man",
+                        scanlatorId: "viz",
+                        language: "en",
+                        chapterNumber: 165,
+                        sourcePath: "C:\\Users\\cameron\\Documents\\mangamesh-test-chapters\\csm\\chapter-165",
+                        displayName: "CSM 165",
+                        releaseType: "manual"
+                    }
+                ];
+                resolve(imported);
+            }, 500);
         });
     }
 };

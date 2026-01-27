@@ -1,7 +1,26 @@
-import type { ImportChapterRequest } from '../types/api';
-import { mockApi } from './mock';
+import type { ImportChapterRequest, ImportedChapter } from '../types/api';
+
 
 export async function importChapter(request: ImportChapterRequest): Promise<void> {
-    console.log('Mock importing chapter:', request);
-    return mockApi.importChapter();
+    const response = await fetch('https://localhost:7124/api/import/chapter', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(request),
+    });
+
+    if (!response.ok) {
+        throw new Error(`Import failed: ${response.statusText}`);
+    }
+}
+
+export async function getImportedChapters(): Promise<ImportedChapter[]> {
+    const response = await fetch('https://localhost:7124/api/import/chapters');
+
+    if (!response.ok) {
+        throw new Error(`Failed to fetch history: ${response.statusText}`);
+    }
+
+    return await response.json();
 }

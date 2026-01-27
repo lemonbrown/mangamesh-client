@@ -46,10 +46,15 @@ namespace MangaMesh.Client.Implementations
              ManifestAnnouncement announcement,
              CancellationToken ct = default)
         {
-            var response = await _httpClient.PostAsJsonAsync(
-                "/api/tracker/announce",
-                announcement,
-                ct);
+            dynamic content = new
+            {
+                NodeId = announcement.NodeId,
+                ManifestHash = announcement.ManifestHash.Value
+            };
+
+            var httpContent = JsonContent.Create(content);            
+
+            var response = await _httpClient.PostAsync("/api/announce/manifest", httpContent);
 
             if (response.IsSuccessStatusCode)
                 return;
