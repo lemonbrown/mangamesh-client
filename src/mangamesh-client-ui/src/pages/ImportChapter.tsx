@@ -1,8 +1,90 @@
 import { useState, useEffect } from 'react';
 import { importChapter, getImportedChapters } from '../api/import';
-import type { ImportChapterRequest } from '../types/api';
+import { searchMetadata, getMangaDetails } from '../api/metadata';
+import type { ImportChapterRequest, MangaMetadata, MangaChapter } from '../types/api';
+import { debounce } from 'lodash';
 
 export default function ImportChapter() {
+    // Metadata search state
+    const [metadataResults, setMetadataResults] = useState<MangaMetadata[]>([]);
+    const [isSearchingMetadata, setIsSearchingMetadata] = useState(false);
+    const [showMetadataDropdown, setShowMetadataDropdown] = useState(false);
+
+    // Chapter selection state
+    const [availableChapters, setAvailableChapters] = useState<MangaChapter[]>([]);
+    const [chapterInputValue, setChapterInputValue] = useState('');
+    const [showChapterDropdown, setShowChapterDropdown] = useState(false);
+    const [isLoadingChapters, setIsLoadingChapters] = useState(false);
+
+    // Debounced search function
+    const debouncedSearch = debounce(async (query: string) => {
+        if (!query || query.length < 2) {
+            setMetadataResults([]);
+            return;
+        }
+
+        setIsSearchingMetadata(true);
+        try {
+            const results = await searchMetadata(query);
+            setMetadataResults(results);
+            setShowMetadataDropdown(true);
+        } catch (e) {
+            console.error(e);
+        } finally {
+            setIsSearchingMetadata(false);
+        }
+    }, 500);
+
+    // Handle input change
+    const handleSeriesIdChange = (value: string) => {
+        setForm({ ...form, seriesId: value });
+        debouncedSearch(value);
+    };
+
+    const selectMetadata = async (meta: MangaMetadata) => {
+        setForm({ ...form, seriesId: meta.title });
+        setShowMetadataDropdown(false);
+
+        // Fetch chapters for the selected series
+        if (meta.externalMangaId) {
+            setIsLoadingChapters(true);
+            try {
+                const details = await getMangaDetails(meta.externalMangaId);
+                // Sort chapters descending by chapter number (parsing potential non-numeric)
+                const sorted = (details.chapters || []).sort((a, b) => {
+                    const numA = parseFloat(a.chapterNumber) || 0;
+                    const numB = parseFloat(b.chapterNumber) || 0;
+                    return numB - numA;
+                });
+                setAvailableChapters(sorted);
+                setChapterInputValue(''); // Reset chapter input
+                setForm(prev => ({ ...prev, chapterNumber: 0 }));
+            } catch (e) {
+                console.error("Failed to load chapters", e);
+                // Optional: show error to user
+            } finally {
+                setIsLoadingChapters(false);
+            }
+        }
+    };
+
+    const handleChapterChange = (value: string) => {
+        setChapterInputValue(value);
+        const num = parseFloat(value);
+        if (!isNaN(num)) {
+            setForm({ ...form, chapterNumber: num });
+        }
+    };
+
+    const selectChapter = (chapter: MangaChapter) => {
+        const displayValue = chapter.title
+            ? `${chapter.chapterNumber} - ${chapter.title}`
+            : chapter.chapterNumber;
+        setChapterInputValue(displayValue);
+        setForm(prev => ({ ...prev, chapterNumber: parseFloat(chapter.chapterNumber) || 0 }));
+        setShowChapterDropdown(false);
+    };
+
     const [form, setForm] = useState<ImportChapterRequest>({
         seriesId: '',
         scanlatorId: '',
@@ -36,10 +118,14 @@ export default function ImportChapter() {
         setMessage(null);
 
         try {
-            await importChapter(form);
+            await importChapter({
+                ...form,
+                displayName: form.displayName || `${form.seriesId} Ch. ${form.chapterNumber}`,
+                releaseType: form.releaseType || 'manual'
+            });
             setMessage({ type: 'success', text: 'Chapter imported successfully' });
-            // Reset numeric field but maybe keep others?
             setForm(prev => ({ ...prev, chapterNumber: prev.chapterNumber + 1 }));
+            setChapterInputValue((form.chapterNumber + 1).toString());
             loadHistory();
         } catch (e) {
             setMessage({ type: 'error', text: 'Failed to import chapter' });
@@ -66,15 +152,49 @@ export default function ImportChapter() {
 
                     <form onSubmit={handleSubmit} className="space-y-6">
                         <div className="grid grid-cols-2 gap-6">
-                            <div className="col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Series ID</label>
-                                <input
-                                    type="text"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    value={form.seriesId}
-                                    onChange={e => setForm({ ...form, seriesId: e.target.value })}
-                                    required
-                                />
+                            <div className="col-span-2 relative">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Series ID / Metadata Search</label>
+                                <div className="relative">
+                                    <input
+                                        type="text"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                        value={form.seriesId}
+                                        onChange={e => handleSeriesIdChange(e.target.value)}
+                                        onFocus={() => { if (metadataResults.length > 0) setShowMetadataDropdown(true); }}
+                                        placeholder="Search for series metadata..."
+                                        required
+                                        autoComplete="off"
+                                    />
+                                    {isSearchingMetadata && (
+                                        <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
+                                            <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+                                        </div>
+                                    )}
+                                </div>
+
+                                {showMetadataDropdown && metadataResults.length > 0 && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                        {metadataResults.map((meta, idx) => (
+                                            <div
+                                                key={idx}
+                                                className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
+                                                onClick={() => selectMetadata(meta)}
+                                            >
+                                                <div className="font-medium text-gray-900">{meta.title}</div>
+                                                <div className="text-xs text-gray-500 flex justify-between">
+                                                    <span>{meta.year > 0 ? meta.year : 'Unknown Year'} • {meta.status}</span>
+                                                    <span className="bg-gray-100 px-1 rounded text-gray-600">Source: {meta.source}</span>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <div
+                                            className="p-2 bg-gray-50 text-center text-xs text-blue-600 cursor-pointer hover:bg-gray-100 border-t border-gray-200"
+                                            onClick={() => setShowMetadataDropdown(false)}
+                                        >
+                                            Close Search
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -99,40 +219,49 @@ export default function ImportChapter() {
                                 />
                             </div>
 
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Display Name (Optional)</label>
+
+
+                            <div className="relative">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">Chapter Number</label>
                                 <input
                                     type="text"
                                     className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    value={form.displayName}
-                                    placeholder={`${form.seriesId} ${form.chapterNumber}`.trim()}
-                                    onChange={e => setForm({ ...form, displayName: e.target.value })}
-                                />
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Release Type</label>
-                                <select
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    value={form.releaseType}
-                                    onChange={e => setForm({ ...form, releaseType: e.target.value as 'manual' | 'automatic' })}
+                                    value={chapterInputValue}
+                                    onChange={e => handleChapterChange(e.target.value)}
+                                    onFocus={() => { if (availableChapters.length > 0) setShowChapterDropdown(true); }}
+                                    placeholder="Select or type chapter number"
                                     required
-                                >
-                                    <option value="manual">Manual</option>
-                                    <option value="automatic">Automatic</option>
-                                </select>
-                            </div>
-
-                            <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Chapter Number</label>
-                                <input
-                                    type="number"
-                                    step="0.1"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                    value={form.chapterNumber}
-                                    onChange={e => setForm({ ...form, chapterNumber: parseFloat(e.target.value) })}
-                                    required
+                                    autoComplete="off"
                                 />
+                                {isLoadingChapters && (
+                                    <div className="absolute right-3 top-9">
+                                        <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
+                                    </div>
+                                )}
+
+                                {showChapterDropdown && availableChapters.length > 0 && (
+                                    <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
+                                        {availableChapters
+                                            .filter(ch => ch.chapterNumber.includes(chapterInputValue))
+                                            .map((ch, idx) => (
+                                                <div
+                                                    key={idx}
+                                                    className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
+                                                    onClick={() => selectChapter(ch)}
+                                                >
+                                                    <span className="font-medium">Ch. {ch.chapterNumber}</span>
+                                                    {ch.title && <span className="text-gray-500 ml-2">- {ch.title}</span>}
+                                                    <span className="text-xs text-gray-400 ml-2">({new Date(ch.publishDate).toLocaleDateString()})</span>
+                                                </div>
+                                            ))}
+                                        <div
+                                            className="p-2 bg-gray-50 text-center text-xs text-blue-600 cursor-pointer hover:bg-gray-100 border-t border-gray-200"
+                                            onClick={() => setShowChapterDropdown(false)}
+                                        >
+                                            Close List
+                                        </div>
+                                    </div>
+                                )}
                             </div>
 
                             <div className="col-span-2">

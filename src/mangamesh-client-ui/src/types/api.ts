@@ -63,3 +63,30 @@ export interface ImportedChapter {
     displayName: string;
     releaseType: string;
 }
+
+export interface MangaMetadata {
+    source: number;
+    externalMangaId: string;
+    title: string;
+    altTitles: string[];
+    status: string;
+    year: number;
+}
+
+export interface MangaChapter {
+    chapterId: string;
+    mangaId: string;
+    source: number;
+    chapterNumber: string;
+    volume: string;
+    title: string;
+    language: string;
+    publishDate: string;
+}
+
+export interface MangaDetails {
+    mangaId: string;
+    source: number;
+    language: string;
+    chapters: MangaChapter[];
+}

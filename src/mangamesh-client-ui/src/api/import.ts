@@ -2,7 +2,7 @@ import type { ImportChapterRequest, ImportedChapter } from '../types/api';
 
 
 export async function importChapter(request: ImportChapterRequest): Promise<void> {
-    const response = await fetch('https://localhost:7124/api/import/chapter', {
+    const response = await fetch('/api/import/chapter', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json',
@@ -16,7 +16,7 @@ export async function importChapter(request: ImportChapterRequest): Promise<void
 }
 
 export async function getImportedChapters(): Promise<ImportedChapter[]> {
-    const response = await fetch('https://localhost:7124/api/import/chapters');
+    const response = await fetch('/api/import/chapters');
 
     if (!response.ok) {
         throw new Error(`Failed to fetch history: ${response.statusText}`);
