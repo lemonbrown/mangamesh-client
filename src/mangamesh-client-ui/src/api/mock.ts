@@ -233,5 +233,21 @@ export const mockApi = {
                 resolve(imported);
             }, 500);
         });
+    },
+
+    // Keys
+    getKeys: async (): Promise<import('../types/api').KeyPair> => {
+        const stored = localStorage.getItem('mock_keys');
+        if (stored) return Promise.resolve(JSON.parse(stored));
+        return Promise.resolve({ publicKeyBase64: 'mock-public-key-not-generated-yet' });
+    },
+
+    generateKeys: async (): Promise<import('../types/api').KeyPair> => {
+        const newKeys = {
+            publicKeyBase64: 'start1' + Math.random().toString(36).substring(7) + 'end',
+            privateKeyBase64: 'priv_' + Math.random().toString(36).substring(2) + Math.random().toString(36).substring(2)
+        };
+        localStorage.setItem('mock_keys', JSON.stringify({ publicKeyBase64: newKeys.publicKeyBase64 })); // Don't store private
+        return Promise.resolve(newKeys);
     }
 };

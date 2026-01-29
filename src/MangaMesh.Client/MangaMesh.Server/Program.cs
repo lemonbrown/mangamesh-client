@@ -31,6 +31,8 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddSingleton<IBlobStore>(new BlobStore(root));
 builder.Services.AddSingleton<IManifestStore>(new ManifestStore(root));
 builder.Services.AddScoped<ImportChapterService>();
+builder.Services.AddScoped<IKeyPairService, KeyPairService>()
+        .AddScoped<IKeyStore, KeyStore>();
 
 builder.Services.
     AddScoped<MangaMesh.Server.Services.IImportChapterService, ImportChapterServiceWrapper>();

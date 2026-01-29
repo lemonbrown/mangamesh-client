@@ -6,6 +6,7 @@ import ImportChapter from './pages/ImportChapter';
 import Storage from './pages/Storage';
 import SeriesDetails from './pages/SeriesDetails';
 import Reader from './components/Reader';
+import Keys from './pages/Keys';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
           <Route path="read/:manifestHash" element={<Reader />} />
           <Route path="import" element={<ImportChapter />} />
           <Route path="storage" element={<Storage />} />
+          <Route path="keys" element={<Keys />} />
         </Route>
       </Routes>
     </BrowserRouter>

@@ -15,6 +15,17 @@ export default defineConfig({
         target: 'https://localhost:7030',
         changeOrigin: true,
         secure: false
+      },
+      '^/api/auth': {
+        target: 'https://localhost:7030',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path.replace(/^\/api\/auth/, '/api')
+      },
+      '^/api/keys': {
+        target: 'https://localhost:7124',
+        changeOrigin: true,
+        secure: false
       }
     }
   }

@@ -33,6 +33,7 @@ export default function Nav() {
                     <NavLink to="/subscriptions">Subscriptions</NavLink>
                     <NavLink to="/import">Import</NavLink>
                     <NavLink to="/storage">Storage</NavLink>
+                    <NavLink to="/keys">Keys</NavLink>
                 </div>
             </div>
             <div className="text-xs text-gray-400">

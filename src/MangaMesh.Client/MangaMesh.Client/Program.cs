@@ -30,7 +30,8 @@ var builder = new HostBuilder().ConfigureServices(services =>
         _ => new FileSubscriptionStore("data/subscriptions.json"))
     .AddScoped<IManifestStore, ManifestStore>()
     .AddSingleton<IBlobStore>(new BlobStore(root))
-    .AddSingleton<IManifestStore>(new ManifestStore(root));
+    .AddSingleton<IManifestStore>(new ManifestStore(root))
+    .AddScoped<IKeyStore, KeyStore>();
 
     services.AddHttpClient<IMetadataClient, HttpMetadataClient>(client =>
     {
@@ -41,6 +42,8 @@ var builder = new HostBuilder().ConfigureServices(services =>
     {
         client.BaseAddress = new Uri(trackerUrl);
     });
+
+
     services.AddHostedService(provider =>
         new ReplicationService(
             tracker: provider.GetRequiredService<ITrackerClient>(),

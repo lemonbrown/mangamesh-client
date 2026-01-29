@@ -90,3 +90,18 @@ export interface MangaDetails {
     language: string;
     chapters: MangaChapter[];
 }
+
+export interface KeyPair {
+    publicKeyBase64: string;
+    privateKeyBase64?: string;
+}
+
+export interface KeyChallenge {
+    challengeId: string;
+    nonce: string;
+    expiresAt: string;
+}
+
+export interface VerifySignatureResponse {
+    valid: boolean;
+}
