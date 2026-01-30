@@ -18,7 +18,7 @@ function App() {
           <Route path="subscriptions" element={<Subscriptions />} />
           <Route path="series" element={<Series />} />
           <Route path="series/:seriesId" element={<SeriesDetails />} />
-          <Route path="read/:manifestHash" element={<Reader />} />
+          <Route path="series/:seriesId/read/:chapterId" element={<Reader />} />
           <Route path="import" element={<ImportChapter />} />
           <Route path="storage" element={<Storage />} />
           <Route path="keys" element={<Keys />} />

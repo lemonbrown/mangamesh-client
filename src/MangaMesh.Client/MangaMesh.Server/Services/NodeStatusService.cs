@@ -17,13 +17,13 @@ namespace MangaMesh.Server.Services
         public async Task<NodeStatusDto> GetStatusAsync(CancellationToken ct = default)
         {
             var peerCount = _replicationService.GetConnectedPeersCount();
-            var seededManifests = await _replicationService.GetSeededManifestCountAsync(ct);
+            //var seededManifests = await _replicationService.GetSeededManifestCountAsync(ct);
             var storageStats = await _storage.GetStatsAsync(ct);
 
             return new NodeStatusDto(
                 NodeId: _replicationService.NodeId,
                 PeerCount: peerCount,
-                SeededManifests: seededManifests,
+                SeededManifests: 0,
                 StorageUsedMb: storageStats.UsedMb
             );
         }

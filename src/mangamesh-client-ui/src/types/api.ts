@@ -54,6 +54,39 @@ export interface SeriesSearchResult {
     lastUploadedAt: string; // ISO Date
 }
 
+export interface SeriesDetailsResponse {
+    seriesId: string;
+    title: string;
+    description?: string;
+    status?: string;
+    year?: number;
+}
+
+export interface ChapterSummaryResponse {
+    chapterId: string;
+    chapterNumber: string;
+    volume?: string;
+    title?: string;
+}
+
+export interface ChapterManifest {
+    manifestHash: string;
+    language: string;
+    scanGroup?: string;
+    isVerified?: boolean;
+    quality: string;
+    uploadedAt: string;
+}
+
+export interface ChapterDetailsResponse {
+    chapterId: string;
+    seriesId: string;
+    chapterNumber: string;
+    title?: string;
+    manifests: ChapterManifest[];
+    pages: string[];
+}
+
 export interface ImportedChapter {
     seriesId: string;
     scanlatorId: string;

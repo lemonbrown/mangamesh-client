@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react';
 import { importChapter, getImportedChapters } from '../api/import';
-import { searchMetadata, getMangaDetails } from '../api/metadata';
+import { searchSeries, getSeriesChapters } from '../api/series';
 import { getKeys, requestChallenge, solveChallenge, verifySignature } from '../api/keys';
-import type { ImportChapterRequest, MangaMetadata, MangaChapter, KeyPair } from '../types/api';
+import type { ImportChapterRequest, SeriesSearchResult, ChapterSummaryResponse, KeyPair } from '../types/api';
 import { debounce } from 'lodash';
 
 export default function ImportChapter() {
-    // Metadata search state
-    const [metadataResults, setMetadataResults] = useState<MangaMetadata[]>([]);
+    // Metadata (Series) search state
+    const [metadataResults, setMetadataResults] = useState<SeriesSearchResult[]>([]);
     const [isSearchingMetadata, setIsSearchingMetadata] = useState(false);
     const [showMetadataDropdown, setShowMetadataDropdown] = useState(false);
 
     // Chapter selection state
-    const [availableChapters, setAvailableChapters] = useState<MangaChapter[]>([]);
+    const [availableChapters, setAvailableChapters] = useState<ChapterSummaryResponse[]>([]);
     const [chapterInputValue, setChapterInputValue] = useState('');
     const [showChapterDropdown, setShowChapterDropdown] = useState(false);
     const [isLoadingChapters, setIsLoadingChapters] = useState(false);
@@ -26,7 +26,7 @@ export default function ImportChapter() {
 
         setIsSearchingMetadata(true);
         try {
-            const results = await searchMetadata(query);
+            const results = await searchSeries(query);
             setMetadataResults(results);
             setShowMetadataDropdown(true);
         } catch (e) {
@@ -42,17 +42,17 @@ export default function ImportChapter() {
         debouncedSearch(value);
     };
 
-    const selectMetadata = async (meta: MangaMetadata) => {
+    const selectMetadata = async (meta: SeriesSearchResult) => {
         setForm({ ...form, seriesId: meta.title });
         setShowMetadataDropdown(false);
 
         // Fetch chapters for the selected series
-        if (meta.externalMangaId) {
+        if (meta.seriesId) {
             setIsLoadingChapters(true);
             try {
-                const details = await getMangaDetails(meta.externalMangaId);
+                const chapters = await getSeriesChapters(meta.seriesId);
                 // Sort chapters descending by chapter number (parsing potential non-numeric)
-                const sorted = (details.chapters || []).sort((a, b) => {
+                const sorted = [...chapters].sort((a, b) => {
                     const numA = parseFloat(a.chapterNumber) || 0;
                     const numB = parseFloat(b.chapterNumber) || 0;
                     return numB - numA;
@@ -77,10 +77,8 @@ export default function ImportChapter() {
         }
     };
 
-    const selectChapter = (chapter: MangaChapter) => {
-        const displayValue = chapter.title
-            ? `${chapter.chapterNumber} - ${chapter.title}`
-            : chapter.chapterNumber;
+    const selectChapter = (chapter: ChapterSummaryResponse) => {
+        const displayValue = chapter.chapterNumber;
         setChapterInputValue(displayValue);
         setForm(prev => ({ ...prev, chapterNumber: parseFloat(chapter.chapterNumber) || 0 }));
         setShowChapterDropdown(false);
@@ -297,8 +295,8 @@ export default function ImportChapter() {
                                                     >
                                                         <div className="font-medium text-gray-900">{meta.title}</div>
                                                         <div className="text-xs text-gray-500 flex justify-between">
-                                                            <span>{meta.year > 0 ? meta.year : 'Unknown Year'} • {meta.status}</span>
-                                                            <span className="bg-gray-100 px-1 rounded text-gray-600">Source: {meta.source}</span>
+                                                            <span>Seeds: {meta.seedCount} • Chapters: {meta.chapterCount}</span>
+                                                            <span className="bg-gray-100 px-1 rounded text-gray-600">ID: {meta.seriesId}</span>
                                                         </div>
                                                     </div>
                                                 ))}
@@ -358,15 +356,13 @@ export default function ImportChapter() {
                                             <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
                                                 {availableChapters
                                                     .filter(ch => ch.chapterNumber.includes(chapterInputValue))
-                                                    .map((ch, idx) => (
+                                                    .map((ch) => (
                                                         <div
-                                                            key={idx}
-                                                            className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
+                                                            key={ch.chapterId}
+                                                            className="p-3 hover:bg-gray-50 cursor-pointer flex items-center justify-between border-b border-gray-100 last:border-0"
                                                             onClick={() => selectChapter(ch)}
                                                         >
                                                             <span className="font-medium">Ch. {ch.chapterNumber}</span>
-                                                            {ch.title && <span className="text-gray-500 ml-2">- {ch.title}</span>}
-                                                            <span className="text-xs text-gray-400 ml-2">({new Date(ch.publishDate).toLocaleDateString()})</span>
                                                         </div>
                                                     ))}
                                                 <div

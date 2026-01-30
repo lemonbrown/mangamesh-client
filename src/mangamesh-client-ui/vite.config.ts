@@ -11,6 +11,11 @@ export default defineConfig({
         changeOrigin: true,
         secure: false
       },
+      '^/api/Series': {
+        target: 'https://localhost:7030',
+        changeOrigin: true,
+        secure: false
+      },
       '^/api/mangametadata': {
         target: 'https://localhost:7030',
         changeOrigin: true,

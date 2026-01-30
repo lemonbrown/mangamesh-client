@@ -1,20 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
-import { getChapterMetadata } from '../api/chapters';
-import type { ChapterMetadata } from '../types/api';
-import PageImage from '../components/PageImage';
+import { getChapterDetails } from '../api/series';
+import type { ChapterDetailsResponse } from '../types/api';
 
 export default function Reader() {
-    const { manifestHash } = useParams<{ manifestHash: string }>();
-    const [metadata, setMetadata] = useState<ChapterMetadata | null>(null);
+    const { seriesId, chapterId } = useParams<{ seriesId: string, chapterId: string }>();
+    const [metadata, setMetadata] = useState<ChapterDetailsResponse | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         async function load() {
-            if (!manifestHash) return;
+            if (!seriesId || !chapterId) return;
             try {
-                const data = await getChapterMetadata(manifestHash);
+                const data = await getChapterDetails(seriesId, chapterId);
                 setMetadata(data);
             } catch (e) {
                 setError('Failed to load chapter');
@@ -23,7 +22,7 @@ export default function Reader() {
             }
         }
         load();
-    }, [manifestHash]);
+    }, [seriesId, chapterId]);
 
     // Preloading logic
     useEffect(() => {
@@ -89,7 +88,7 @@ export default function Reader() {
                     </select>
 
                     <Link
-                        to={`/series/${metadata.seriesId}/${metadata.scanlatorId}/${metadata.language}`}
+                        to={`/series/${seriesId}`}
                         className="text-sm text-blue-600 hover:text-blue-800"
                     >
                         Close
@@ -99,12 +98,18 @@ export default function Reader() {
 
             {/* Pages Container */}
             <div className="max-w-4xl mx-auto p-4 space-y-4">
-                {metadata.pages.map((_pageId, index) => (
-                    <PageImage
-                        key={index}
-                        manifestHash={metadata.manifestHash}
-                        pageIndex={index}
-                    />
+                {(metadata.pages || (metadata as any).Pages || []).map((page: string, index: number) => (
+                    <div key={index} className="flex justify-center">
+                        <img
+                            src={page}
+                            alt={`Page ${index + 1}`}
+                            className="max-w-full h-auto shadow-sm"
+                            onError={(e) => {
+                                // Fallback or error handling if 'page' is not a direct URL
+                                (e.target as HTMLImageElement).src = 'https://via.placeholder.com/600x800?text=Error+Loading+Page';
+                            }}
+                        />
+                    </div>
                 ))}
             </div>
         </div>

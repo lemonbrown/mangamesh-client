@@ -1,25 +1,15 @@
 ﻿using MangaMesh.Client.Abstractions;
-using MangaMesh.Client.Implementations;
 using MangaMesh.Client.Models;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using System;
 using System.Collections.Concurrent;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
 
 namespace MangaMesh.Client.Services
 {
     public sealed class ReplicationService : BackgroundService
     {
-        private readonly ITrackerClient _tracker;
-        private readonly IPeerFetcher _fetcher;
-        private readonly ISubscriptionStore _subscriptionStore;
-        private readonly IManifestStore _manifests;
-        private readonly IMetadataClient _metadata;
+        private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<ReplicationService> _logger;
 
         private readonly TimeSpan _interval = TimeSpan.FromMinutes(5);
@@ -27,56 +17,21 @@ namespace MangaMesh.Client.Services
         private readonly string _publicIp;
         private readonly int _port;
 
-        private readonly ConcurrentDictionary<string, SeriesSubscription> _subscriptions
-            = new(StringComparer.OrdinalIgnoreCase);
-
-        // Key: Node ID, Value: Peer info (IP, Port, LastSeen, etc.)
         private readonly ConcurrentDictionary<string, PeerInfo> _connectedPeers
             = new();
 
-        public string NodeId { get; } = Guid.NewGuid().ToString();
+        public string NodeId => _nodeId;
 
         public ReplicationService(
-            ITrackerClient tracker,
-            IPeerFetcher fetcher,
-            ISubscriptionStore subscriptionStore,
-            IManifestStore manifests,
-            IMetadataClient metadata,
-            ILogger<ReplicationService> logger,
-            string nodeId,
-            string publicIp,
-            int port)
+            IServiceScopeFactory scopeFactory,
+            ILogger<ReplicationService> logger)
         {
-            _tracker = tracker;
-            _fetcher = fetcher;
-            _subscriptionStore = subscriptionStore;
-            _manifests = manifests;
-            _metadata = metadata;
+            _scopeFactory = scopeFactory;
             _logger = logger;
 
-            _nodeId = nodeId;
-            _publicIp = publicIp;
-            _port = port;
-        }
-
-        // Example: method called when a peer connects
-        public void AddPeer(PeerInfo peer)
-        {
-            _connectedPeers[peer.NodeId] = peer;
-        }
-
-        // Example: method called when a peer disconnects
-        public void RemovePeer(string nodeId)
-        {
-            _connectedPeers.TryRemove(nodeId, out _);
-        }
-
-        // ✅ The method your UI / NodeStatusService needs
-        public int GetConnectedPeersCount()
-        {
-            // Optionally, filter out stale peers based on LastSeen
-            var now = DateTime.UtcNow;
-            return _connectedPeers.Values.Count(p => (now - p.LastSeen).TotalSeconds < 120);
+            _nodeId = Guid.NewGuid().ToString();
+            _publicIp = "1.2.3.4";
+            _port = 5000;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -87,8 +42,21 @@ namespace MangaMesh.Client.Services
             {
                 try
                 {
-                    await AnnounceAsync();
-                    await SyncSubscriptionsAsync();
+                    using var scope = _scopeFactory.CreateScope();
+
+                    var tracker = scope.ServiceProvider.GetRequiredService<ITrackerClient>();
+                    var fetcher = scope.ServiceProvider.GetRequiredService<IPeerFetcher>();
+                    var subscriptionStore = scope.ServiceProvider.GetRequiredService<ISubscriptionStore>();
+                    var manifests = scope.ServiceProvider.GetRequiredService<IManifestStore>();
+                    var metadata = scope.ServiceProvider.GetRequiredService<IMetadataClient>();
+
+                    await AnnounceAsync(tracker, manifests);
+                    await SyncSubscriptionsAsync(
+                        subscriptionStore,
+                        manifests,
+                        metadata,
+                        fetcher
+                    );
                 }
                 catch (Exception ex)
                 {
@@ -100,12 +68,15 @@ namespace MangaMesh.Client.Services
         }
 
         // 🔊 Announce manifests we host
-        private async Task AnnounceAsync()
+        private async Task AnnounceAsync(
+            ITrackerClient tracker,
+            IManifestStore manifests)
         {
-            var manifestHashes = await _manifests.GetAllHashesAsync();
+            var manifestHashes = await manifests.GetAllHashesAsync();
+
             try
             {
-                await _tracker.AnnounceAsync(
+                await tracker.AnnounceAsync(
                     nodeId: _nodeId,
                     ip: _publicIp,
                     port: _port,
@@ -114,34 +85,48 @@ namespace MangaMesh.Client.Services
 
                 _logger.LogInformation("Announced {count} manifests", manifestHashes.Count());
             }
-            catch (HttpRequestException exception)
+            catch (HttpRequestException ex)
             {
-                _logger.LogError($"Unable to annouce: {exception.Message}");
+                _logger.LogError(ex, "Unable to announce");
             }
-
         }
 
         // 📚 Sync subscribed series
-        private async Task SyncSubscriptionsAsync()
+        private async Task SyncSubscriptionsAsync(
+            ISubscriptionStore subscriptionStore,
+            IManifestStore manifests,
+            IMetadataClient metadata,
+            IPeerFetcher fetcher)
         {
-            var subs = await _subscriptionStore.GetAllAsync();
+            var subs = await subscriptionStore.GetAllAsync();
 
             foreach (var sub in subs.Where(s => s.AutoFetch))
             {
-                await SyncSeriesAsync(sub.SeriesId, sub.Language);
+                await SyncSeriesAsync(
+                    sub.SeriesId,
+                    sub.Language,
+                    manifests,
+                    metadata,
+                    fetcher
+                );
             }
         }
 
         // 📖 Sync one series
-        private async Task SyncSeriesAsync(string seriesId, string language)
+        private async Task SyncSeriesAsync(
+            string seriesId,
+            string language,
+            IManifestStore manifests,
+            IMetadataClient metadata,
+            IPeerFetcher fetcher)
         {
-            var chapters = await _metadata.GetChaptersAsync(seriesId, language);
+            var chapters = await metadata.GetChaptersAsync(seriesId, language);
 
             foreach (var chapter in chapters)
             {
                 var manifestHash = new ManifestHash(chapter.ManifestHash);
 
-                if (await _manifests.ExistsAsync(manifestHash))
+                if (await manifests.ExistsAsync(manifestHash))
                     continue;
 
                 _logger.LogInformation(
@@ -152,7 +137,7 @@ namespace MangaMesh.Client.Services
 
                 try
                 {
-                    await _fetcher.FetchManifestAsync(chapter.ManifestHash);
+                    await fetcher.FetchManifestAsync(chapter.ManifestHash);
                 }
                 catch (Exception ex)
                 {
@@ -161,39 +146,11 @@ namespace MangaMesh.Client.Services
             }
         }
 
-        // ✅ Count of manifests this node is currently seeding
-        public async Task<int> GetSeededManifestCountAsync(CancellationToken ct = default)
+        public int GetConnectedPeersCount()
         {
-            var hashes = await _manifests.GetAllHashesAsync();
-            return hashes.Count();
+            var now = DateTime.UtcNow;
+            return _connectedPeers.Values.Count(p => (now - p.LastSeen).TotalSeconds < 120);
         }
-
-        // Add a subscription
-        public bool SubscribeToReleaseLine(string seriesId, string language)
-        {
-            var key = GetKey(seriesId, language);
-            return _subscriptions.TryAdd(key,new SeriesSubscription()
-            {
-                Language = language,
-                SeriesId = seriesId
-            });
-        }
-
-        // Remove a subscription
-        public bool UnsubscribeFromReleaseLine(string seriesId, string language)
-        {
-            var key = GetKey(seriesId, language);
-            return _subscriptions.TryRemove(key, out _);
-        }
-
-        // ✅ Get all subscriptions
-        public IEnumerable<SeriesSubscription> GetSubscriptions()
-            => _subscriptions.Values;
-
-        // Generate a unique key for dictionary
-        private static string GetKey(string seriesId, string language)
-            => $"{seriesId.ToLowerInvariant()}|{language.ToLowerInvariant()}";
 
     }
-
 }

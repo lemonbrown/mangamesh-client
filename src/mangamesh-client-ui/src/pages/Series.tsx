@@ -1,8 +1,7 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { searchSeries } from '../api/subscriptions';
+import { searchSeries } from '../api/series';
 import type { SeriesSearchResult } from '../types/api';
-import SeriesSearch from '../components/SeriesSearch';
 
 export default function Series() {
     const [results, setResults] = useState<SeriesSearchResult[]>([]);
