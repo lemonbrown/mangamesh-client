@@ -15,7 +15,8 @@ namespace MangaMesh.Client.Abstractions
         //Task PublishAsync(ChapterMetadata metadata, CancellationToken ct = default);
 
         Task<IReadOnlyList<ChapterMetadata>> GetChaptersAsync(
-            ReleaseLineId releaseLine,
+            string seriesId,
+            string language,
             CancellationToken ct = default
         );
     }

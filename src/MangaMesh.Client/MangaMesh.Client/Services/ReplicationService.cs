@@ -128,14 +128,14 @@ namespace MangaMesh.Client.Services
 
             foreach (var sub in subs.Where(s => s.AutoFetch))
             {
-                await SyncSeriesAsync(sub.ReleaseLine);
+                await SyncSeriesAsync(sub.SeriesId, sub.Language);
             }
         }
 
         // 📖 Sync one series
-        private async Task SyncSeriesAsync(ReleaseLineId releaseLineId)
+        private async Task SyncSeriesAsync(string seriesId, string language)
         {
-            var chapters = await _metadata.GetChaptersAsync(releaseLineId);
+            var chapters = await _metadata.GetChaptersAsync(seriesId, language);
 
             foreach (var chapter in chapters)
             {
@@ -146,7 +146,7 @@ namespace MangaMesh.Client.Services
 
                 _logger.LogInformation(
                     "Fetching {series} Chapter {chapter}",
-                    releaseLineId.SeriesId,
+                    seriesId,
                     chapter.ChapterNumber
                 );
 

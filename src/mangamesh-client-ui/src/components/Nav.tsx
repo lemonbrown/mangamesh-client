@@ -31,6 +31,7 @@ export default function Nav() {
                 <div className="flex space-x-2">
                     <NavLink to="/">Dashboard</NavLink>
                     <NavLink to="/subscriptions">Subscriptions</NavLink>
+                    <NavLink to="/series">Series</NavLink>
                     <NavLink to="/import">Import</NavLink>
                     <NavLink to="/storage">Storage</NavLink>
                     <NavLink to="/keys">Keys</NavLink>

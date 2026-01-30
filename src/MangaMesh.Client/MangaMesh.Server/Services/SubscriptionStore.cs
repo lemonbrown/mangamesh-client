@@ -1,46 +1,53 @@
-﻿using MangaMesh.Client.Services;
+﻿using MangaMesh.Client.Abstractions;
+using MangaMesh.Client.Models;
+using MangaMesh.Client.Services;
 using MangaMesh.Server.Models;
-using MangaMesh.Server.Stores;
+using MangaMesh.Shared.Stores;
 
 namespace MangaMesh.Server.Services
 {
     public class SubscriptionStore : ISubscriptionStore
     {
-        private readonly ReplicationService _replicationService;
 
-        public SubscriptionStore(ReplicationService replicationService)
+
+        public async Task<IReadOnlyList<SeriesSubscription>> GetAllAsync(CancellationToken ct = default)
         {
-            _replicationService = replicationService;
+
+            var subs =
+                (await JsonFileStore.LoadAsync<SeriesSubscription>(AppContext.BaseDirectory + "\\data\\subscriptions.json"))
+                    .ToList()
+                    .AsReadOnly();
+
+            return subs;
         }
 
-        public Task<IReadOnlyList<SubscriptionDto>> GetAllAsync(CancellationToken ct = default)
+        public async Task AddAsync(SeriesSubscription subscription, CancellationToken ct = default)
         {
-            var subs = _replicationService.GetSubscriptions()
-                .Select(s => new SubscriptionDto(s.SeriesId, s.Language))
-                .ToList()
-                .AsReadOnly();
+            var subs =
+                    (await JsonFileStore.LoadAsync<SeriesSubscription>(AppContext.BaseDirectory + "\\data\\subscriptions.json"))
+                        .ToList();
 
-            return Task.FromResult<IReadOnlyList<SubscriptionDto>>(subs);
+            var sub = new SeriesSubscription() { Language = subscription.Language, SeriesId =  subscription.SeriesId };
+
+            subs.Add(sub);
+
+            await JsonFileStore.SaveAsync(AppContext.BaseDirectory + "\\data\\subscriptions.json", subs);
         }
 
-        public Task<bool> AddAsync(SubscriptionDto subscription, CancellationToken ct = default)
+        public async Task RemoveAsync(SeriesSubscription subscription, CancellationToken ct = default)
         {
-            var added = _replicationService.SubscribeToReleaseLine(
-                subscription.SeriesId,
-                subscription.Language
-            );
+            var subs =
+                  (await JsonFileStore.LoadAsync<SeriesSubscription>(AppContext.BaseDirectory + "\\data\\subscriptions.json"))
+                      .ToList();
 
-            return Task.FromResult(added);
+            subs = subs.Where(n => n.SeriesId != subscription.SeriesId).ToList();
+
+            await JsonFileStore.SaveAsync(AppContext.BaseDirectory + "\\data\\subscriptions.json", subs);
         }
 
-        public Task<bool> RemoveAsync(SubscriptionDto subscription, CancellationToken ct = default)
+        public Task<bool> ExistsAsync(SeriesSubscription releaseLine, CancellationToken cancellationToken = default)
         {
-            var removed = _replicationService.UnsubscribeFromReleaseLine(
-                subscription.SeriesId,
-                subscription.Language
-            );
-
-            return Task.FromResult(removed);
+            throw new NotImplementedException();
         }
     }
 

@@ -9,10 +9,10 @@ namespace MangaMesh.Client.Abstractions
 {
     public interface ISubscriptionStore
     {
-        Task<IReadOnlyList<ReleaseSubscription>> GetAllAsync();
-        Task AddAsync(ReleaseSubscription subscription);
-        Task RemoveAsync(ReleaseLineId releaseLine);
-        Task<bool> ExistsAsync(ReleaseLineId releaseLine);
+        Task<IReadOnlyList<SeriesSubscription>> GetAllAsync(CancellationToken cancellationToken = default);
+        Task AddAsync(SeriesSubscription subscription, CancellationToken cancellationToken = default);
+        Task RemoveAsync(SeriesSubscription releaseLine, CancellationToken cancellationToken = default);
+        Task<bool> ExistsAsync(SeriesSubscription releaseLine, CancellationToken cancellationToken = default);
     }
 
 

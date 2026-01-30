@@ -13,6 +13,8 @@ namespace MangaMesh.Client.Models
         public string Language { get; set; } = "";
 
         public bool AutoFetch { get; init; } = true;
+
+        public DateTime SubscribedAt { get; set; }
     }
 
 }

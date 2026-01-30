@@ -24,14 +24,14 @@ namespace MangaMesh.Client.Implementations
         }
 
         public async Task<IReadOnlyList<ChapterMetadata>> GetChaptersAsync(
-            ReleaseLineId releaseLine,
+            string seriesId,
+            string language,
             CancellationToken ct = default)
         {
             var url =
-                $"/api/releases/" +
-                $"{releaseLine.SeriesId}/" +
-                $"{releaseLine.ScanlatorId}/" +
-                $"{releaseLine.Language}/chapters";
+                $"/api/series/" +
+                $"{seriesId}/" +
+                $"{language}/chapters";
 
             var response = await _http.GetAsync(url, ct);
             response.EnsureSuccessStatusCode();
@@ -42,18 +42,6 @@ namespace MangaMesh.Client.Implementations
             return chapters ?? new List<ChapterMetadata>();
         }
 
-        //public async Task PublishAsync(ChapterMetadata metadata, CancellationToken ct = default)
-        //{
-        //    if (metadata == null) throw new ArgumentNullException(nameof(metadata));
-
-        //    // Announce to tracker
-        //    var json = JsonSerializer.Serialize(metadata);
-        //    var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-        //    // POST to tracker endpoint
-        //    var response = await _http.PostAsync("api/tracker/announce", content, ct);
-        //    response.EnsureSuccessStatusCode();
-        //}
     }
 
 }

@@ -26,8 +26,6 @@ var builder = new HostBuilder().ConfigureServices(services =>
     .AddLogging(n => n.AddConsole())
     .AddScoped<ITrackerClient, TrackerClient>()
     .AddScoped<IPeerFetcher, PeerFetcher>()
-    .AddSingleton<ISubscriptionStore>(
-        _ => new FileSubscriptionStore("data/subscriptions.json"))
     .AddScoped<IManifestStore, ManifestStore>()
     .AddSingleton<IBlobStore>(new BlobStore(root))
     .AddSingleton<IManifestStore>(new ManifestStore(root))
