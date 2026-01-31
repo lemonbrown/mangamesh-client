@@ -30,7 +30,7 @@ namespace MangaMesh.Server.Controllers
             //request the peer manifest for this chapter
             var manifestResponse = await httpClient.GetAsync($"chapters/{chapterId}/manifest");
 
-            manifestResponse.Content.ReadFromJsonAsync<Manifest>
+            //manifestResponse.Content.ReadFromJsonAsync<Manifest>
 
             return Results.Ok();
         }

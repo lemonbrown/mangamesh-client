@@ -43,7 +43,7 @@ namespace MangaMesh.Client.Implementations
             Directory.CreateDirectory(AppContext.BaseDirectory + "\\data\\keys");
 
             // ✅ Safe to await now
-            await _keyStore.SaveAsync(result.PublicKeyBase64);
+            await _keyStore.SaveAsync(result.PublicKeyBase64, result.PrivateKeyBase64);
 
             return result;
         }

@@ -1,5 +1,8 @@
 ﻿using MangaMesh.Client.Abstractions;
 using MangaMesh.Client.Models;
+using MangaMesh.Shared.Helpers;
+using MangaMesh.Shared.Services;
+using NSec.Cryptography;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,34 +21,21 @@ namespace MangaMesh.Client.Services
 
         private readonly ITrackerClient _trackerClient;
 
-        public ImportChapterService(IBlobStore blobStore, IManifestStore manifestStore, ITrackerClient trackerClient)
+        private readonly IKeyStore _keyStore;
+
+        public ImportChapterService(
+            IBlobStore blobStore, 
+            IManifestStore manifestStore, 
+            ITrackerClient trackerClient,
+            IKeyStore keyStore)
         {
             _blobStore = blobStore;
 
             _manifestStore = manifestStore;
 
             _trackerClient = trackerClient;
-        }
 
-        public async Task<ManifestHash> ImportChapterAsync(
-            string folderPath,
-            ChapterManifest template)
-        {
-            var pages = new List<BlobHash>();
-
-            foreach (var file in Directory.GetFiles(folderPath).OrderBy(f => f))
-            {
-                if (file.Contains("json"))
-                    continue;
-
-                await using var fs = File.OpenRead(file);
-                var hash = await _blobStore.PutAsync(fs);
-                pages.Add(hash);
-            }
-
-            var manifest = template with { Pages = pages };
-
-            return await _manifestStore.PutAsync(manifest);
+            _keyStore = keyStore;
         }
 
         /// <summary>
@@ -73,7 +63,6 @@ namespace MangaMesh.Client.Services
                 Language = request.Language,
                 ChapterNumber = request.ChapterNumber,
                 FilePaths = files.ToList(),
-                //ReleaseLine = request.ReleaseLineOverride ?? $"{request.ScanlatorId}-{request.Language}"
             };
 
             // Step 3: compute hash for the manifest
@@ -87,6 +76,33 @@ namespace MangaMesh.Client.Services
                 await _manifestStore.SaveAsync(hash, manifest);
 
                 // Step 5: publish manifest to trackers
+
+                // Step 5.1 sign the manifest
+
+                Shared.Models.ChapterManifest chapterManifest = new()
+                {
+                    Chapter = manifest.ChapterNumber.ToString(),
+                    CreatedUtc = DateTime.UtcNow,
+                    ChapterId =  request.SeriesId + ":" + manifest.ChapterNumber.ToString(),
+                    Language = request.Language,
+                    SeriesId = request.SeriesId,
+                    ScanGroup = request.ScanlatorId,
+                    Title = "",
+                    TotalSize = 0,
+                };
+
+                var keyPair = await _keyStore.GetAsync();
+
+                byte[] privateKeyBytes = Convert.FromBase64String(keyPair.PrivateKeyBase64);
+
+                var key = Key.Import(
+                    SignatureAlgorithm.Ed25519,
+                    privateKeyBytes,
+                    KeyBlobFormat.RawPrivateKey);
+
+                var signedManifest = ManifestSigningService.SignManifest(chapterManifest, key);
+
+                // Step 5.2 publish to trackers
 
                 await _trackerClient.AnnounceManifestAsync(new ManifestAnnouncement
                 {
