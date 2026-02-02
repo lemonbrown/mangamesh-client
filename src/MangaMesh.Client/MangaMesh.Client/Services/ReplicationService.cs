@@ -11,27 +11,26 @@ namespace MangaMesh.Client.Services
     {
         private readonly IServiceScopeFactory _scopeFactory;
         private readonly ILogger<ReplicationService> _logger;
+        private readonly INodeConnectionInfoProvider _connectionInfo;
 
-        private readonly TimeSpan _interval = TimeSpan.FromMinutes(5);
-        private readonly string _nodeId;
-        private readonly string _publicIp;
-        private readonly int _port;
+        private readonly TimeSpan _interval = TimeSpan.FromSeconds(30);
+        private readonly INodeIdentityService _nodeIdentity;
 
         private readonly ConcurrentDictionary<string, PeerInfo> _connectedPeers
             = new();
 
-        public string NodeId => _nodeId;
+        public string NodeId => _nodeIdentity.NodeId;
 
         public ReplicationService(
             IServiceScopeFactory scopeFactory,
-            ILogger<ReplicationService> logger)
+            ILogger<ReplicationService> logger,
+            INodeIdentityService nodeIdentity,
+            INodeConnectionInfoProvider connectionInfo)
         {
             _scopeFactory = scopeFactory;
             _logger = logger;
-
-            _nodeId = Guid.NewGuid().ToString();
-            _publicIp = "1.2.3.4";
-            _port = 5000;
+            _nodeIdentity = nodeIdentity;
+            _connectionInfo = connectionInfo;
         }
 
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -61,6 +60,7 @@ namespace MangaMesh.Client.Services
                 catch (Exception ex)
                 {
                     _logger.LogError(ex, "Replication loop error");
+                    _nodeIdentity.UpdateStatus(false);
                 }
 
                 await Task.Delay(_interval, stoppingToken);
@@ -72,22 +72,52 @@ namespace MangaMesh.Client.Services
             ITrackerClient tracker,
             IManifestStore manifests)
         {
-            var manifestHashes = await manifests.GetAllHashesAsync();
-
             try
             {
+                var (ip, port) = await _connectionInfo.GetConnectionInfoAsync();
+
+                // 1. Calculate smart sync hash
+                var (setHash, count) = await manifests.GetSetHashAsync();
+
+                // 2. Try lightweight Ping
+                var isSynced = await tracker.PingAsync(
+                    _nodeIdentity.NodeId,
+                    ip,
+                    port,
+                    setHash,
+                    count
+                );
+
+                if (isSynced)
+                {
+                    _logger.LogInformation("Tracker synced (Smart Ping)");
+                    _nodeIdentity.UpdateStatus(true);
+                    return;
+                }
+
+                // 3. Fallback to full Announce
+                _logger.LogInformation("Tracker mismatch, performing full announce...");
+                var manifestHashes = await manifests.GetAllHashesAsync();
+
                 await tracker.AnnounceAsync(
-                    nodeId: _nodeId,
-                    ip: _publicIp,
-                    port: _port,
+                    nodeId: _nodeIdentity.NodeId,
+                    ip: ip,
+                    port: port,
                     manifestHashes: manifestHashes.Select(m => m.Value).ToList()
                 );
 
                 _logger.LogInformation("Announced {count} manifests", manifestHashes.Count());
+                _nodeIdentity.UpdateStatus(true);
             }
             catch (HttpRequestException ex)
             {
                 _logger.LogError(ex, "Unable to announce");
+                _nodeIdentity.UpdateStatus(false);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError(ex, "Unexpected error during announce");
+                _nodeIdentity.UpdateStatus(false);
             }
         }
 

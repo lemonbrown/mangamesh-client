@@ -3,8 +3,8 @@ using MangaMesh.Client.Implementations;
 using MangaMesh.Client.Services;
 using MangaMesh.Server.Services;
 
-var dataPath = "\\data";
-    
+var dataPath = Path.Combine(AppContext.BaseDirectory, "input");
+
 var builder = WebApplication.CreateBuilder(args);
 
 var trackerUrl = "https://localhost:7030";
@@ -28,15 +28,19 @@ builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddSingleton<IBlobStore>(new BlobStore(dataPath));
-builder.Services.AddSingleton<IManifestStore>(new ManifestStore(dataPath));
+builder.Services.AddSingleton<IManifestStore>(new ManifestStore(Path.Combine(dataPath, "manifests")));
 builder.Services.AddSingleton<ISubscriptionStore>(new SubscriptionStore());
+builder.Services.AddSingleton<INodeIdentityService>(sp => new NodeIdentityService(sp.GetRequiredService<ILogger<NodeIdentityService>>()));
 
 builder.Services
         .AddScoped<ImportChapterService>()
         .AddScoped<IPeerFetcher, PeerFetcher>()
         .AddScoped<IKeyPairService, KeyPairService>()
         .AddScoped<IKeyStore, KeyStore>()
-        .AddScoped<MangaMesh.Server.Services.IImportChapterService, ImportChapterServiceWrapper>();
+        .AddScoped<IKeyPairService, KeyPairService>()
+        .AddScoped<IKeyStore, KeyStore>()
+        .AddScoped<MangaMesh.Server.Services.IImportChapterService, ImportChapterServiceWrapper>()
+        .AddSingleton<INodeConnectionInfoProvider, ServerNodeConnectionInfoProvider>();
 
 builder.Services.AddHostedService<ReplicationService>();
 

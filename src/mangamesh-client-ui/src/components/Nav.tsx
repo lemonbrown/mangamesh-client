@@ -1,6 +1,8 @@
 import { Link, useLocation } from 'react-router-dom';
 import classNames from 'classnames';
 
+import NodeStatusIndicator from './NodeStatusIndicator';
+
 const NavLink = ({ to, children }: { to: string; children: React.ReactNode }) => {
     const location = useLocation();
     const isActive = location.pathname === to;
@@ -37,8 +39,8 @@ export default function Nav() {
                     <NavLink to="/keys">Keys</NavLink>
                 </div>
             </div>
-            <div className="text-xs text-gray-400">
-                Node Control Panel
+            <div>
+                <NodeStatusIndicator />
             </div>
         </nav>
     );

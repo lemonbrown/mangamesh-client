@@ -38,6 +38,11 @@ namespace MangaMesh.Server.Services
                 FilesImported: result.FileCount
             );
         }
+
+        public async Task ReannounceAsync(MangaMesh.Client.Models.ManifestHash hash, string nodeId)
+        {
+            await _importService.ReannounceAsync(hash, nodeId);
+        }
     }
 
 }

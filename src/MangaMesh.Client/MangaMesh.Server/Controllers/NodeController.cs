@@ -1,26 +1,35 @@
-﻿using MangaMesh.Server.Models;
-using MangaMesh.Server.Services;
+﻿using MangaMesh.Client.Abstractions;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MangaMesh.Server.Controllers
 {
     [ApiController]
-    [Route("api/node")]
+    [Route("api/[controller]")]
     public class NodeController : ControllerBase
     {
-        private readonly INodeStatusService _status;
+        private readonly INodeIdentityService _nodeIdentity;
+        private readonly ITrackerClient _trackerClient;
 
-        public NodeController(INodeStatusService status)
+        public NodeController(
+            INodeIdentityService nodeIdentity,
+            ITrackerClient trackerClient)
         {
-            _status = status;
+            _nodeIdentity = nodeIdentity;
+            _trackerClient = trackerClient;
         }
 
         [HttpGet("status")]
-        public async Task<ActionResult<NodeStatusDto>> GetStatus()
+        public async Task<IResult> GetStatus()
         {
-            var status = await _status.GetStatusAsync();
-            return Ok(status);
+            var isConnected = await _trackerClient.CheckNodeExistsAsync(_nodeIdentity.NodeId);
+            _nodeIdentity.UpdateStatus(isConnected);
+
+            return Results.Ok(new
+            {
+                _nodeIdentity.NodeId,
+                IsConnected = isConnected,
+                LastPingUtc = _nodeIdentity.LastPingUtc
+            });
         }
     }
-
 }

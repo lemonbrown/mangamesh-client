@@ -15,6 +15,8 @@ namespace MangaMesh.Server.Services
             ImportChapterRequestDto request,
             CancellationToken ct = default
         );
+
+        Task ReannounceAsync(MangaMesh.Client.Models.ManifestHash hash, string nodeId);
     }
 
 }

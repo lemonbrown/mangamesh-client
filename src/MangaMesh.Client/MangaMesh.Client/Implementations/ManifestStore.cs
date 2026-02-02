@@ -61,9 +61,50 @@ namespace MangaMesh.Client.Implementations
             throw new NotImplementedException();
         }
 
-        public Task<ChapterManifest?> GetAsync(ManifestHash hash)
+        public async Task<ChapterManifest?> GetAsync(ManifestHash hash)
         {
-            throw new NotImplementedException();
+            var path = GetPath(hash);
+            if (!File.Exists(path))
+                return null;
+
+            var json = await File.ReadAllTextAsync(path);
+            return JsonSerializer.Deserialize<ChapterManifest>(json, JsonOptions);
+        }
+
+        public async Task<(string SetHash, int Count)> GetSetHashAsync()
+        {
+            var hashes = await GetAllHashesAsync();
+            var sortedHashes = hashes.OrderBy(h => h.Value).ToList();
+
+            if (sortedHashes.Count == 0)
+                return (string.Empty, 0);
+
+            var sb = new StringBuilder();
+            foreach (var hash in sortedHashes)
+            {
+                sb.Append(hash.Value);
+            }
+
+            var inputBytes = Encoding.UTF8.GetBytes(sb.ToString());
+            var hashBytes = SHA256.HashData(inputBytes);
+
+            return (Convert.ToHexString(hashBytes).ToLowerInvariant(), sortedHashes.Count);
+        }
+
+        public async Task<ChapterManifest?> GetBySeriesAndChapterIdAsync(string seriesId, string chapterId)
+        {
+            var hashes = await GetAllHashesAsync();
+            foreach (var hash in hashes)
+            {
+                var manifest = await GetAsync(hash);
+                if (manifest != null &&
+                    manifest.SeriesId == seriesId &&
+                    manifest.ChapterId == chapterId)
+                {
+                    return manifest;
+                }
+            }
+            return null;
         }
 
         private static readonly JsonSerializerOptions JsonOptions = new()

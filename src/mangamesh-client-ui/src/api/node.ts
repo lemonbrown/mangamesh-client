@@ -1,15 +1,11 @@
 import type { NodeStatus } from '../types/api';
-import { mockApi } from './mock';
+
+const API_BASE_URL = 'https://localhost:7124'; // Client API port
 
 export async function getNodeStatus(): Promise<NodeStatus> {
-    // Return mock data for now
-    return mockApi.getNodeStatus();
-
-    /* Real implementation commented out
-    const response = await fetch('/api/node/status');
+    const response = await fetch(`${API_BASE_URL}/api/node/status`);
     if (!response.ok) {
         throw new Error('Failed to fetch node status');
     }
-    return response.json();
-    */
+    return await response.json();
 }

@@ -13,6 +13,8 @@ namespace MangaMesh.Client.Abstractions
         public Task SaveAsync(ManifestHash hash, ChapterManifest manifest);
         Task<ManifestHash> PutAsync(ChapterManifest manifest);
         Task<ChapterManifest?> GetAsync(ManifestHash hash);
+        Task<ChapterManifest?> GetBySeriesAndChapterIdAsync(string seriesId, string chapterId);
+        Task<(string SetHash, int Count)> GetSetHashAsync();
         Task<bool> ExistsAsync(ManifestHash manifestHash);
         Task<IEnumerable<ManifestHash>> GetAllHashesAsync();
     }

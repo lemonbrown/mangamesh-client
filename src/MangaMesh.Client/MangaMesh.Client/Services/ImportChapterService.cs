@@ -22,12 +22,14 @@ namespace MangaMesh.Client.Services
         private readonly ITrackerClient _trackerClient;
 
         private readonly IKeyStore _keyStore;
+        private readonly INodeIdentityService _nodeIdentity;
 
         public ImportChapterService(
-            IBlobStore blobStore, 
-            IManifestStore manifestStore, 
+            IBlobStore blobStore,
+            IManifestStore manifestStore,
             ITrackerClient trackerClient,
-            IKeyStore keyStore)
+            IKeyStore keyStore,
+            INodeIdentityService nodeIdentity)
         {
             _blobStore = blobStore;
 
@@ -36,6 +38,8 @@ namespace MangaMesh.Client.Services
             _trackerClient = trackerClient;
 
             _keyStore = keyStore;
+
+            _nodeIdentity = nodeIdentity;
         }
 
         /// <summary>
@@ -55,7 +59,16 @@ namespace MangaMesh.Client.Services
             if (files.Length == 0)
                 throw new InvalidOperationException("No valid image files found in source folder.");
 
-            // Step 2: create chapter manifest
+            // Step 2: save blobs and create chapter manifest
+            var pageHashes = new List<BlobHash>();
+
+            foreach (var file in files)
+            {
+                using var stream = File.OpenRead(file);
+                var blobHash = await _blobStore.PutAsync(stream);
+                pageHashes.Add(blobHash);
+            }
+
             var manifest = new ChapterManifest
             {
                 SeriesId = request.SeriesId,
@@ -63,6 +76,7 @@ namespace MangaMesh.Client.Services
                 Language = request.Language,
                 ChapterNumber = request.ChapterNumber,
                 FilePaths = files.ToList(),
+                Pages = pageHashes
             };
 
             // Step 3: compute hash for the manifest
@@ -79,16 +93,18 @@ namespace MangaMesh.Client.Services
 
                 // Step 5.1 sign the manifest
 
+                var totalSize = files.Sum(f => new FileInfo(f).Length);
+
                 Shared.Models.ChapterManifest chapterManifest = new()
                 {
                     Chapter = manifest.ChapterNumber.ToString(),
                     CreatedUtc = DateTime.UtcNow,
-                    ChapterId =  request.SeriesId + ":" + manifest.ChapterNumber.ToString(),
+                    ChapterId = request.SeriesId + ":" + manifest.ChapterNumber.ToString(),
                     Language = request.Language,
                     SeriesId = request.SeriesId,
                     ScanGroup = request.ScanlatorId,
                     Title = "",
-                    TotalSize = 0,
+                    TotalSize = totalSize,
                 };
 
                 var keyPair = await _keyStore.GetAsync();
@@ -104,17 +120,52 @@ namespace MangaMesh.Client.Services
 
                 // Step 5.2 publish to trackers
 
-                await _trackerClient.AnnounceManifestAsync(new ManifestAnnouncement
+                await _trackerClient.AnnounceManifestAsync(new AnnounceManifestRequest
                 {
-                    NodeId = request.NodeId,
+                    NodeId = _nodeIdentity.NodeId,
                     ManifestHash = hash,
                     SeriesId = manifest.SeriesId,
                     ChapterNumber = manifest.ChapterNumber,
                     Language = manifest.Language,
                     ScanlatorId = manifest.ReleaseLine.ScanlatorId,
-                    ReleaseType = request.ReleaseType
+                    ReleaseType = request.ReleaseType,
+
+                    // Added fields for verification
+                    ChapterId = chapterManifest.ChapterId,
+                    Chapter = chapterManifest.Chapter,
+                    Title = chapterManifest.Title,
+                    ScanGroup = chapterManifest.ScanGroup,
+                    TotalSize = chapterManifest.TotalSize,
+                    CreatedUtc = chapterManifest.CreatedUtc,
+                    Signature = signedManifest.Signature,
+                    PublicKey = signedManifest.PublisherPublicKey
                 });
-            }          
+
+                // Step 6: update manifest with signature details before returning/saving if needed
+                // Ideally we should save the signed details back to the manifest store so we can re-announce later.
+                // The current flow saves *before* signing (Step 4), which means the saved manifest lacks signature.
+                // We should update the manifest with signature and save it again or save it after signing.
+
+                // Let's update the local manifest object with signature details and re-save.
+                // Note: The manifest stored is Client.Models.ChapterManifest.
+                // We need to map the fields back.
+
+                manifest = manifest with
+                {
+                    ChapterId = chapterManifest.ChapterId,
+                    Chapter = chapterManifest.Chapter,
+                    Title = chapterManifest.Title,
+                    ScanGroup = chapterManifest.ScanGroup,
+                    TotalSize = chapterManifest.TotalSize,
+                    CreatedUtc = chapterManifest.CreatedUtc,
+                    Signature = signedManifest.Signature,
+                    PublicKey = signedManifest.PublisherPublicKey,
+                    SignedBy = "self" // or some logic
+                };
+
+                // Re-save with signature
+                await _manifestStore.SaveAsync(hash, manifest);
+            }
 
             // Step 6: return result
             return new ImportChapterResult
@@ -123,6 +174,37 @@ namespace MangaMesh.Client.Services
                 FileCount = files.Length,
                 AlreadyExists = isManifestExisting
             };
+        }
+
+        public async Task ReannounceAsync(ManifestHash hash, string nodeId)
+        {
+            var manifest = await _manifestStore.GetAsync(hash);
+            if (manifest == null)
+                throw new FileNotFoundException($"Manifest {hash} not found");
+
+            if (string.IsNullOrEmpty(manifest.Signature) || string.IsNullOrEmpty(manifest.PublicKey))
+                throw new InvalidOperationException("Manifest does not contain signature data. Cannot re-announce.");
+
+            await _trackerClient.AnnounceManifestAsync(new AnnounceManifestRequest
+            {
+                NodeId = nodeId,
+                ManifestHash = hash,
+                SeriesId = manifest.SeriesId,
+                ChapterNumber = manifest.ChapterNumber,
+                Language = manifest.Language,
+                ScanlatorId = manifest.ReleaseLine.ScanlatorId,
+                ReleaseType = ReleaseType.VerifiedScanlation, // Assuming VerifiedScanlation for signed manifests
+
+                // Verification fields
+                ChapterId = manifest.ChapterId,
+                Chapter = manifest.Chapter,
+                Title = manifest.Title,
+                ScanGroup = manifest.ScanGroup,
+                TotalSize = manifest.TotalSize,
+                CreatedUtc = manifest.CreatedUtc,
+                Signature = manifest.Signature,
+                PublicKey = manifest.PublicKey
+            });
         }
 
         private static bool IsImageFile(string path)

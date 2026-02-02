@@ -10,5 +10,6 @@ namespace MangaMesh.Client.Abstractions
     public interface IImportChapterService
     {
         public Task<ImportChapterResult> ImportAsync(ImportChapterRequest request, CancellationToken ct = default);
+        Task ReannounceAsync(ManifestHash hash, string nodeId);
     }
 }

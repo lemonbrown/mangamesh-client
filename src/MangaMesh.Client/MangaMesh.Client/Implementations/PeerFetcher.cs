@@ -25,7 +25,11 @@ namespace MangaMesh.Client.Implementations
             _trackerClient = trackerClient;
             _blobStore = blobStore;
             _manifestStore = manifestStore;
-            _httpClient = new HttpClient();
+            var handler = new HttpClientHandler
+            {
+                ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator
+            };
+            _httpClient = new HttpClient(handler);
         }
 
         public async Task<ManifestHash> FetchManifestAsync(string manifestHash)
@@ -40,7 +44,7 @@ namespace MangaMesh.Client.Implementations
             {
                 try
                 {
-                    var url = $"http://{peer.IP}:{peer.Port}/manifest/{manifestHash}";
+                    var url = $"https://{peer.IP}:{peer.Port}/manifest/{manifestHash}";
                     var response = await _httpClient.GetAsync(url);
                     if (!response.IsSuccessStatusCode) continue;
 
@@ -69,7 +73,7 @@ namespace MangaMesh.Client.Implementations
                 {
                     try
                     {
-                        var url = $"http://{peer.IP}:{peer.Port}/blob/{blobHash.Value}";
+                        var url = $"https://{peer.IP}:{peer.Port}/blob/{blobHash.Value}";
                         var response = await _httpClient.GetAsync(url);
                         if (!response.IsSuccessStatusCode) continue;
 

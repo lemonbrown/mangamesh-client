@@ -17,6 +17,18 @@ namespace MangaMesh.Client.Models
             return new ManifestHash(value);
         }
 
+        public static bool TryParse(string value, out ManifestHash result)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                result = default;
+                return false;
+            }
+
+            result = new ManifestHash(value);
+            return true;
+        }
+
         /// <summary>
         /// Computes a deterministic hash for a ChapterManifest.
         /// </summary>

@@ -29,7 +29,8 @@ var builder = new HostBuilder().ConfigureServices(services =>
     .AddScoped<IManifestStore, ManifestStore>()
     .AddSingleton<IBlobStore>(new BlobStore(root))
     .AddSingleton<IManifestStore>(new ManifestStore(root))
-    .AddScoped<IKeyStore, KeyStore>();
+    .AddScoped<IKeyStore, KeyStore>()
+    .AddSingleton<INodeIdentityService>(sp => new NodeIdentityService(sp.GetRequiredService<ILogger<NodeIdentityService>>()));
 
     services.AddHttpClient<IMetadataClient, HttpMetadataClient>(client =>
     {
@@ -42,19 +43,16 @@ var builder = new HostBuilder().ConfigureServices(services =>
     });
 
 
-    //services.AddHostedService(provider =>
-    //    new ReplicationService(
-    //        tracker: provider.GetRequiredService<ITrackerClient>(),
-    //        fetcher: null,
-    //        subscriptionStore: provider.GetRequiredService<ISubscriptionStore>(),
-    //        manifests: provider.GetRequiredService<IManifestStore>(),
-    //        metadata: provider.GetRequiredService<IMetadataClient>(),
-    //        logger: provider.GetRequiredService<ILogger<ReplicationService>>(),
-    //        nodeId: Guid.NewGuid().ToString(),
-    //        publicIp: "1.2.3.4",
-    //        port: 5000
-    //    )
-    //);
+    services.AddSingleton<INodeConnectionInfoProvider, ConsoleNodeConnectionInfoProvider>();
+
+    services.AddHostedService(provider =>
+        new ReplicationService(
+            scopeFactory: provider.GetRequiredService<IServiceScopeFactory>(),
+            logger: provider.GetRequiredService<ILogger<ReplicationService>>(),
+            nodeIdentity: provider.GetRequiredService<INodeIdentityService>(),
+            connectionInfo: provider.GetRequiredService<INodeConnectionInfoProvider>()
+        )
+    );
 });
 
 Console.WriteLine("Running replication services...");

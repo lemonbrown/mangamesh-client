@@ -138,3 +138,21 @@ export interface KeyChallenge {
 export interface VerifySignatureResponse {
     valid: boolean;
 }
+
+export interface AnalyzedChapterDto {
+    sourcePath: string;
+    suggestedChapterNumber: number;
+    fileCount: number;
+}
+
+export interface NodeStatus {
+    nodeId: string;
+    isConnected: boolean;
+    lastPingUtc: string | null;
+}
+
+export interface NodeStatus {
+    nodeId: string;
+    isConnected: boolean;
+    lastPingUtc: string | null;
+}
