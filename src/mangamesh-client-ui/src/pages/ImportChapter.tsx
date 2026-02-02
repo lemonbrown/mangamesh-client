@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
-import { importChapter, getImportedChapters } from '../api/import';
+import { useState, useEffect, useRef } from 'react';
+import { importChapter, getImportedChapters, uploadChapters } from '../api/import';
 import { searchSeries, getSeriesChapters } from '../api/series';
 import { getKeys, requestChallenge, solveChallenge, verifySignature } from '../api/keys';
-import type { ImportChapterRequest, SeriesSearchResult, ChapterSummaryResponse, KeyPair } from '../types/api';
+import type { ImportChapterRequest, SeriesSearchResult, ChapterSummaryResponse, KeyPair, AnalyzedChapterDto } from '../types/api';
 import { debounce } from 'lodash';
 
 export default function ImportChapter() {
@@ -104,6 +104,12 @@ export default function ImportChapter() {
     const [isVerifying, setIsVerifying] = useState(false);
     const [signatureStatus, setSignatureStatus] = useState<'idle' | 'success' | 'error'>('idle');
     const [verificationError, setVerificationError] = useState<string | null>(null);
+    const hasAutoVerified = useRef(false);
+
+    // Upload/Batch state
+    const [uploadBatch, setUploadBatch] = useState<AnalyzedChapterDto[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+    const [batchReviewMode, setBatchReviewMode] = useState(false);
 
     useEffect(() => {
         loadHistory();
@@ -114,6 +120,11 @@ export default function ImportChapter() {
         try {
             const k = await getKeys();
             setKeys(k);
+            if (k.privateKeyBase64 && k.publicKeyBase64 && !hasAutoVerified.current) {
+                setPrivateKeyInput(k.privateKeyBase64);
+                hasAutoVerified.current = true;
+                handleVerifySignature(k.publicKeyBase64, k.privateKeyBase64);
+            }
         } catch (e) {
             console.error('Failed to load keys', e);
         }
@@ -140,30 +151,166 @@ export default function ImportChapter() {
         setMessage(null);
 
         try {
-            await importChapter({
-                ...form,
-                displayName: form.displayName || `${form.seriesId} Ch. ${form.chapterNumber}`,
-                releaseType: form.releaseType || 'manual'
-            });
-            setMessage({ type: 'success', text: 'Chapter imported successfully' });
-            setForm(prev => ({ ...prev, chapterNumber: prev.chapterNumber + 1 }));
-            setChapterInputValue((form.chapterNumber + 1).toString());
+            if (batchReviewMode) {
+                // Batch import
+                let importedCount = 0;
+                for (const item of uploadBatch) {
+                    await importChapter({
+                        ...form,
+                        chapterNumber: item.suggestedChapterNumber,
+                        sourcePath: item.sourcePath,
+                        displayName: form.displayName || `${form.seriesId} Ch. ${item.suggestedChapterNumber}`,
+                        releaseType: form.releaseType || 'manual'
+                    });
+                    importedCount++;
+                }
+                setMessage({ type: 'success', text: `Successfully imported ${importedCount} chapters.` });
+                setBatchReviewMode(false);
+                setUploadBatch([]);
+            } else {
+                // Single legacy import
+                await importChapter({
+                    ...form,
+                    displayName: form.displayName || `${form.seriesId} Ch. ${form.chapterNumber}`,
+                    releaseType: form.releaseType || 'manual'
+                });
+                setMessage({ type: 'success', text: 'Chapter imported successfully' });
+                setForm(prev => ({ ...prev, chapterNumber: prev.chapterNumber + 1 }));
+                setChapterInputValue((form.chapterNumber + 1).toString());
+            }
+
             loadHistory();
         } catch (e) {
-            setMessage({ type: 'error', text: 'Failed to import chapter' });
+            console.error(e);
+            setMessage({ type: 'error', text: 'Failed to import chapters' });
         } finally {
             setSubmitting(false);
         }
     }
 
-    async function handleVerifySignature() {
-        if (!keys?.publicKeyBase64) {
+    const [isDragging, setIsDragging] = useState(false);
+
+    // Recursively traverse FileSystemEntry to get all files with paths
+    async function traverseFileTree(item: any, path: string = ''): Promise<{ file: File, path: string }[]> {
+        if (item.isFile) {
+            return new Promise(resolve => {
+                item.file((file: File) => {
+                    resolve([{ file, path: path + file.name }]);
+                });
+            });
+        } else if (item.isDirectory) {
+            const dirReader = item.createReader();
+            const entries: any[] = [];
+
+            const readEntries = async () => {
+                const result = await new Promise<any[]>((resolve) => dirReader.readEntries(resolve));
+                if (result.length > 0) {
+                    entries.push(...result);
+                    await readEntries();
+                }
+            };
+
+            await readEntries();
+
+            const promises = entries.map(entry => traverseFileTree(entry, path + item.name + "/"));
+            const results = await Promise.all(promises);
+            return results.flat();
+        }
+        return [];
+    }
+
+    const handleFiles = async (fileList: File[], fromDrop = false, items?: DataTransferItemList) => {
+        setIsUploading(true);
+        const formData = new FormData();
+
+        try {
+            if (fromDrop && items) {
+                // Handle Drag & Drop with folder traversal
+                const promises: Promise<{ file: File, path: string }[]>[] = [];
+                for (let i = 0; i < items.length; i++) {
+                    const item = items[i].webkitGetAsEntry?.();
+                    if (item) {
+                        promises.push(traverseFileTree(item));
+                    }
+                }
+                const filesWithPath = (await Promise.all(promises)).flat();
+
+                if (filesWithPath.length === 0) {
+                    setMessage({ type: 'error', text: 'No files found in dropped items.' });
+                    setIsUploading(false);
+                    return;
+                }
+
+                filesWithPath.forEach(({ file, path }) => {
+                    // Pass the full relative path as the filename
+                    formData.append('files', file, path);
+                });
+
+            } else {
+                // Handle Input Selection
+                fileList.forEach(file => {
+                    // webkitRelativePath is available for input webkitdirectory
+                    formData.append('files', file, file.webkitRelativePath || file.name);
+                });
+            }
+
+            const batch = await uploadChapters(formData);
+            if (batch.length > 0) {
+                setUploadBatch(batch);
+                setBatchReviewMode(true);
+            } else {
+                setMessage({ type: 'error', text: 'No chapters detected in the uploaded folder.' });
+            }
+        } catch (e) {
+            console.error(e);
+            setMessage({ type: 'error', text: 'Failed to upload files.' });
+        } finally {
+            setIsUploading(false);
+            setIsDragging(false);
+        }
+    };
+
+    const handleFolderSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+        if (e.target.files?.length) {
+            handleFiles(Array.from(e.target.files));
+        }
+        e.target.value = '';
+    };
+
+    const onDragOver = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(true);
+    };
+
+    const onDragLeave = (e: React.DragEvent) => {
+        e.preventDefault();
+        setIsDragging(false);
+    };
+
+    const onDrop = async (e: React.DragEvent) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setIsDragging(false);
+
+        const items = e.dataTransfer.items;
+        if (items && items.length > 0) {
+            await handleFiles([], true, items);
+        } else if (e.dataTransfer.files.length > 0) {
+            await handleFiles(Array.from(e.dataTransfer.files));
+        }
+    };
+
+    async function handleVerifySignature(pubKey?: string, privKey?: string) {
+        const publicToUse = pubKey || keys?.publicKeyBase64;
+        const privateToUse = privKey || privateKeyInput;
+
+        if (!publicToUse) {
             setVerificationError('No public key found for this node');
             setSignatureStatus('error');
             return;
         }
 
-        if (!privateKeyInput) {
+        if (!privateToUse) {
             setVerificationError('Please enter your private key');
             setSignatureStatus('error');
             return;
@@ -175,13 +322,13 @@ export default function ImportChapter() {
 
         try {
             // Step 1: Request Challenge
-            const challenge = await requestChallenge(keys.publicKeyBase64);
+            const challenge = await requestChallenge(publicToUse);
 
             // Step 2: Solve Challenge
-            const signature = await solveChallenge(challenge.nonce, privateKeyInput);
+            const signature = await solveChallenge(challenge.nonce, privateToUse);
 
             // Step 3: Verify Signature
-            const result = await verifySignature(keys.publicKeyBase64, challenge.challengeId, signature);
+            const result = await verifySignature(publicToUse, challenge.challengeId, signature);
 
             if (result.valid) {
                 setSignatureStatus('success');
@@ -234,7 +381,7 @@ export default function ImportChapter() {
                                     />
                                     <button
                                         type="button"
-                                        onClick={handleVerifySignature}
+                                        onClick={() => handleVerifySignature()}
                                         disabled={isVerifying || !privateKeyInput}
                                         className="px-6 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 disabled:opacity-50 transition-colors"
                                     >
@@ -335,15 +482,16 @@ export default function ImportChapter() {
 
 
                                     <div className="relative">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Chapter Number</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Chapter Number {batchReviewMode && '(Default / Override)'}</label>
                                         <input
                                             type="text"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
                                             value={chapterInputValue}
                                             onChange={e => handleChapterChange(e.target.value)}
                                             onFocus={() => { if (availableChapters.length > 0) setShowChapterDropdown(true); }}
                                             placeholder="Select or type chapter number"
-                                            required
+                                            required={!batchReviewMode}
+                                            disabled={batchReviewMode}
                                             autoComplete="off"
                                         />
                                         {isLoadingChapters && (
@@ -376,16 +524,86 @@ export default function ImportChapter() {
                                     </div>
 
                                     <div className="col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Source Folder Path</label>
-                                        <input
-                                            type="text"
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono text-sm"
-                                            placeholder="/path/to/chapter/folder"
-                                            value={form.sourcePath}
-                                            onChange={e => setForm({ ...form, sourcePath: e.target.value })}
-                                            required
-                                        />
-                                        <p className="mt-1 text-xs text-gray-500">Absolute path to the directory containing chapter images.</p>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Source Folder</label>
+
+                                        {!batchReviewMode ? (
+                                            <div
+                                                className={`mt-1 flex justify-center px-6 pt-5 pb-6 border-2 border-dashed rounded-md transition-colors ${isDragging ? 'border-blue-500 bg-blue-50' : 'border-gray-300 hover:border-blue-400'
+                                                    }`}
+                                                onDragOver={onDragOver}
+                                                onDragLeave={onDragLeave}
+                                                onDrop={onDrop}
+                                            >
+                                                <div className="space-y-1 text-center">
+                                                    <svg className="mx-auto h-12 w-12 text-gray-400" stroke="currentColor" fill="none" viewBox="0 0 48 48" aria-hidden="true">
+                                                        <path d="M28 8H12a4 4 0 00-4 4v20m32-12v8m0 0v8a4 4 0 01-4 4H12a4 4 0 01-4-4v-4m32-4l-3.172-3.172a4 4 0 00-5.656 0L28 28M8 32l9.172-9.172a4 4 0 015.656 0L28 28m0 0l4 4m4-24h8m-4-4v8m-12 4h.02" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+                                                    </svg>
+                                                    <div className="flex text-sm text-gray-600">
+                                                        <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-blue-500">
+                                                            <span>Upload Folder</span>
+                                                            <input
+                                                                type="file"
+                                                                className="sr-only"
+                                                                // @ts-ignore - webkitdirectory is standard in modern browsers but missing in types
+                                                                webkitdirectory=""
+                                                                directory=""
+                                                                onChange={handleFolderSelect}
+                                                                multiple
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                    <div className="mt-2 text-sm text-gray-500">
+                                                        <span>or </span>
+                                                        <label className="relative cursor-pointer bg-white rounded-md font-medium text-blue-600 hover:text-blue-500 focus-within:outline-none hover:underline">
+                                                            <span>Upload Archive (Zip/CBZ)</span>
+                                                            <input
+                                                                type="file"
+                                                                className="sr-only"
+                                                                accept=".zip,.cbz,.rar,.cbr"
+                                                                onChange={handleFolderSelect}
+                                                                multiple
+                                                            />
+                                                        </label>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ) : (
+                                            <div className="bg-blue-50 border border-blue-200 rounded-md p-4">
+                                                <div className="flex justify-between items-center mb-4">
+                                                    <h3 className="font-medium text-blue-900">Batch Upload: {uploadBatch.length} Chapters Detected</h3>
+                                                    <button
+                                                        type="button"
+                                                        className="text-xs text-blue-700 hover:text-blue-900 underline"
+                                                        onClick={() => { setBatchReviewMode(false); setUploadBatch([]); }}
+                                                    >
+                                                        Cancel Batch
+                                                    </button>
+                                                </div>
+                                                <div className="max-h-60 overflow-y-auto space-y-2">
+                                                    {uploadBatch.map((item, idx) => (
+                                                        <div key={idx} className="bg-white p-2 rounded border border-blue-100 flex justify-between items-center text-sm">
+                                                            <span className="font-mono text-gray-600 truncate max-w-[60%]" title={item.sourcePath}>
+                                                                .../{item.sourcePath.split(/[/\\]/).pop()}
+                                                            </span>
+                                                            <div className="flex items-center gap-2">
+                                                                <span className="text-gray-500 text-xs">Ch.</span>
+                                                                <input
+                                                                    type="number"
+                                                                    className="w-16 px-1 py-0.5 border border-gray-300 rounded text-right"
+                                                                    value={item.suggestedChapterNumber}
+                                                                    onChange={e => {
+                                                                        const val = parseFloat(e.target.value);
+                                                                        const newBatch = [...uploadBatch];
+                                                                        newBatch[idx].suggestedChapterNumber = isNaN(val) ? 0 : val;
+                                                                        setUploadBatch(newBatch);
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -398,10 +616,10 @@ export default function ImportChapter() {
                                     </div>
                                     <button
                                         type="submit"
-                                        disabled={submitting}
+                                        disabled={submitting || (batchReviewMode && uploadBatch.length === 0) || isUploading}
                                         className="px-8 py-2 bg-blue-600 text-white font-medium rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50"
                                     >
-                                        {submitting ? 'Importing...' : 'Start Import'}
+                                        {isUploading ? 'Uploading...' : submitting ? 'Importing...' : batchReviewMode ? 'Import All Chapters' : 'Start Import'}
                                     </button>
                                 </div>
                             </form>

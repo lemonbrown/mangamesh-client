@@ -31,8 +31,8 @@ namespace MangaMesh.Server.Controllers
         }
 
         [HttpGet]
-        [ProducesResponseType<string>(200)]
-        public async Task<IResult> GetPublicKey()
+        [ProducesResponseType<KeyPairResult>(200)]
+        public async Task<IResult> GetKeyPair()
         {
             var key = await _keyStore.GetAsync();
 

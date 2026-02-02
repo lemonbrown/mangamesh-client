@@ -1,4 +1,18 @@
-import type { ImportChapterRequest, ImportedChapter } from '../types/api';
+import type { ImportChapterRequest, ImportedChapter, AnalyzedChapterDto } from '../types/api';
+
+
+export async function uploadChapters(files: FormData): Promise<AnalyzedChapterDto[]> {
+    const response = await fetch('/api/import/upload', {
+        method: 'POST',
+        body: files
+    });
+
+    if (!response.ok) {
+        throw new Error(`Upload failed: ${response.statusText}`);
+    }
+
+    return await response.json();
+}
 
 
 export async function importChapter(request: ImportChapterRequest): Promise<void> {
