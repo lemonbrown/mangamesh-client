@@ -1,5 +1,6 @@
 ﻿using MangaMesh.Client.Abstractions;
 using MangaMesh.Client.Models;
+using MangaMesh.Shared.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -60,8 +61,10 @@ namespace MangaMesh.Client.Implementations
 
             // 3️⃣ Download each blob
             var downloadedPages = new List<BlobHash>();
-            foreach (var blobHash in manifest.Pages)
+            foreach (var hash in manifest.Files.Select(n => n.Hash))
             {
+                var blobHash = new BlobHash(hash);
+
                 if (_blobStore.Exists(blobHash))
                 {
                     downloadedPages.Add(blobHash);

@@ -83,5 +83,32 @@ namespace MangaMesh.Client.Implementations
             return signatureBase64;
         }
 
+        public bool Verify(string publicKeyBase64, string signatureBase64, string nonceBase64)
+        {
+            try
+            {
+                byte[] publicKeyBytes;
+                try { publicKeyBytes = Convert.FromBase64String(publicKeyBase64); }
+                catch { Console.WriteLine("Verify: Invalid PublicKey Base64"); throw; }
+
+                byte[] signatureBytes;
+                try { signatureBytes = Convert.FromBase64String(signatureBase64); }
+                catch { Console.WriteLine($"Verify: Invalid Signature Base64: '{signatureBase64}'"); throw; }
+
+                byte[] nonceBytes;
+                try { nonceBytes = Convert.FromBase64String(nonceBase64); }
+                catch { Console.WriteLine("Verify: Invalid Nonce Base64"); throw; }
+
+                var algorithm = SignatureAlgorithm.Ed25519;
+                var publicKey = NSec.Cryptography.PublicKey.Import(algorithm, publicKeyBytes, KeyBlobFormat.RawPublicKey);
+
+                return algorithm.Verify(publicKey, nonceBytes, signatureBytes);
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Verify Exception: {ex.Message}");
+                return false;
+            }
+        }
     }
 }

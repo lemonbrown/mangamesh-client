@@ -2,6 +2,7 @@
 using MangaMesh.Client.Abstractions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using MangaMesh.Shared.Models;
 
 namespace MangaMesh.Server.Controllers
 {
@@ -18,6 +19,12 @@ namespace MangaMesh.Server.Controllers
             _manifestStore = manifestStore;
             _trackerClient = trackerClient;
             _blobStore = blobStore;
+        }
+
+        [HttpGet]
+        public async Task<IEnumerable<SeriesSummaryResponse>> Get([FromQuery] string? q, [FromQuery] string? sort)
+        {
+            return await _trackerClient.SearchSeriesAsync(q ?? "", sort);
         }
 
         [HttpGet("{seriesId}/chapter/{chapterId}/manifest/{manifestHash}/read")]
@@ -57,8 +64,10 @@ namespace MangaMesh.Server.Controllers
             }
 
             // Download pages
-            foreach (var page in manifest.Pages)
+            foreach (var hash in manifest.Files.Select(n => n.Hash))
             {
+                var page = new BlobHash(hash);
+
                 if (_blobStore.Exists(page)) continue;
 
                 var blobResponse = await httpClient.GetAsync($"api/blob/{page.Value}");

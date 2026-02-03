@@ -1,73 +1,41 @@
 import { useState, useEffect, useRef } from 'react';
 import { importChapter, getImportedChapters, uploadChapters } from '../api/import';
-import { searchSeries, getSeriesChapters } from '../api/series';
 import { getKeys, requestChallenge, solveChallenge, verifySignature } from '../api/keys';
-import type { ImportChapterRequest, SeriesSearchResult, ChapterSummaryResponse, KeyPair, AnalyzedChapterDto } from '../types/api';
-import { debounce } from 'lodash';
+import { searchSeries } from '../api/series';
+import type { ImportChapterRequest, KeyPair, AnalyzedChapterDto, SeriesSearchResult } from '../types/api';
 
 export default function ImportChapter() {
-    // Metadata (Series) search state
-    const [metadataResults, setMetadataResults] = useState<SeriesSearchResult[]>([]);
-    const [isSearchingMetadata, setIsSearchingMetadata] = useState(false);
-    const [showMetadataDropdown, setShowMetadataDropdown] = useState(false);
+    // ... existing ...
 
-    // Chapter selection state
-    const [availableChapters, setAvailableChapters] = useState<ChapterSummaryResponse[]>([]);
-    const [chapterInputValue, setChapterInputValue] = useState('');
-    const [showChapterDropdown, setShowChapterDropdown] = useState(false);
-    const [isLoadingChapters, setIsLoadingChapters] = useState(false);
+    // Series Search State
+    const [menuTitle, setMenuTitle] = useState('');
+    const [seriesSearchResults, setSeriesSearchResults] = useState<SeriesSearchResult[]>([]);
+    const [showSeriesDropdown, setShowSeriesDropdown] = useState(false);
+    const [isSearchingSeries, setIsSearchingSeries] = useState(false);
 
-    // Debounced search function
-    const debouncedSearch = debounce(async (query: string) => {
-        if (!query || query.length < 2) {
-            setMetadataResults([]);
-            return;
-        }
-
-        setIsSearchingMetadata(true);
-        try {
-            const results = await searchSeries(query);
-            setMetadataResults(results);
-            setShowMetadataDropdown(true);
-        } catch (e) {
-            console.error(e);
-        } finally {
-            setIsSearchingMetadata(false);
-        }
-    }, 500);
-
-    // Handle input change
-    const handleSeriesIdChange = (value: string) => {
-        setForm({ ...form, seriesId: value });
-        debouncedSearch(value);
-    };
-
-    const selectMetadata = async (meta: SeriesSearchResult) => {
-        setForm({ ...form, seriesId: meta.title });
-        setShowMetadataDropdown(false);
-
-        // Fetch chapters for the selected series
-        if (meta.seriesId) {
-            setIsLoadingChapters(true);
-            try {
-                const chapters = await getSeriesChapters(meta.seriesId);
-                // Sort chapters descending by chapter number (parsing potential non-numeric)
-                const sorted = [...chapters].sort((a, b) => {
-                    const numA = parseFloat(a.chapterNumber) || 0;
-                    const numB = parseFloat(b.chapterNumber) || 0;
-                    return numB - numA;
-                });
-                setAvailableChapters(sorted);
-                setChapterInputValue(''); // Reset chapter input
-                setForm(prev => ({ ...prev, chapterNumber: 0 }));
-            } catch (e) {
-                console.error("Failed to load chapters", e);
-                // Optional: show error to user
-            } finally {
-                setIsLoadingChapters(false);
+    useEffect(() => {
+        const timer = setTimeout(async () => {
+            if (menuTitle.length >= 3) {
+                setIsSearchingSeries(true);
+                try {
+                    const results = await searchSeries(menuTitle);
+                    setSeriesSearchResults(results);
+                    setShowSeriesDropdown(true);
+                } catch (e) {
+                    console.error(e);
+                } finally {
+                    setIsSearchingSeries(false);
+                }
+            } else {
+                setSeriesSearchResults([]);
+                setShowSeriesDropdown(false);
             }
-        }
-    };
+        }, 500);
+        return () => clearTimeout(timer);
+    }, [menuTitle]);
+
+    // ... existing ...
+    const [chapterInputValue, setChapterInputValue] = useState('');
 
     const handleChapterChange = (value: string) => {
         setChapterInputValue(value);
@@ -77,13 +45,6 @@ export default function ImportChapter() {
         }
     };
 
-    const selectChapter = (chapter: ChapterSummaryResponse) => {
-        const displayValue = chapter.chapterNumber;
-        setChapterInputValue(displayValue);
-        setForm(prev => ({ ...prev, chapterNumber: parseFloat(chapter.chapterNumber) || 0 }));
-        setShowChapterDropdown(false);
-    };
-
     const [form, setForm] = useState<ImportChapterRequest>({
         seriesId: '',
         scanlatorId: '',
@@ -91,7 +52,9 @@ export default function ImportChapter() {
         chapterNumber: 0,
         sourcePath: '',
         displayName: '',
-        releaseType: 'manual'
+        releaseType: 'manual',
+        source: 0,
+        externalMangaId: ''
     });
     const [submitting, setSubmitting] = useState(false);
     const [message, setMessage] = useState<{ type: 'success' | 'error', text: string } | null>(null);
@@ -159,7 +122,7 @@ export default function ImportChapter() {
                         ...form,
                         chapterNumber: item.suggestedChapterNumber,
                         sourcePath: item.sourcePath,
-                        displayName: form.displayName || `${form.seriesId} Ch. ${item.suggestedChapterNumber}`,
+                        displayName: form.displayName || `${form.externalMangaId} Ch. ${item.suggestedChapterNumber}`,
                         releaseType: form.releaseType || 'manual'
                     });
                     importedCount++;
@@ -171,7 +134,7 @@ export default function ImportChapter() {
                 // Single legacy import
                 await importChapter({
                     ...form,
-                    displayName: form.displayName || `${form.seriesId} Ch. ${form.chapterNumber}`,
+                    displayName: form.displayName || `${form.externalMangaId} Ch. ${form.chapterNumber}`,
                     releaseType: form.releaseType || 'manual'
                 });
                 setMessage({ type: 'success', text: 'Chapter imported successfully' });
@@ -180,9 +143,9 @@ export default function ImportChapter() {
             }
 
             loadHistory();
-        } catch (e) {
+        } catch (e: any) {
             console.error(e);
-            setMessage({ type: 'error', text: 'Failed to import chapters' });
+            setMessage({ type: 'error', text: e.message || 'Failed to import chapters' });
         } finally {
             setSubmitting(false);
         }
@@ -412,47 +375,49 @@ export default function ImportChapter() {
 
                             <form onSubmit={handleSubmit} className="space-y-6">
                                 <div className="grid grid-cols-2 gap-6">
+                                    {/* Series Search / Title */}
                                     <div className="col-span-2 relative">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Series ID / Metadata Search</label>
-                                        <div className="relative">
-                                            <input
-                                                type="text"
-                                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
-                                                value={form.seriesId}
-                                                onChange={e => handleSeriesIdChange(e.target.value)}
-                                                onFocus={() => { if (metadataResults.length > 0) setShowMetadataDropdown(true); }}
-                                                placeholder="Search for series metadata..."
-                                                required
-                                                autoComplete="off"
-                                            />
-                                            {isSearchingMetadata && (
-                                                <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
-                                                    <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
-                                                </div>
-                                            )}
-                                        </div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Series Title</label>
+                                        <input
+                                            type="text"
+                                            className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500"
+                                            value={menuTitle}
+                                            onChange={e => setMenuTitle(e.target.value)}
+                                            placeholder="Search for series..."
+                                            required
+                                            autoComplete="off"
+                                        />
 
-                                        {showMetadataDropdown && metadataResults.length > 0 && (
-                                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                                                {metadataResults.map((meta, idx) => (
+                                        {/* Search Results Dropdown */}
+                                        {showSeriesDropdown && seriesSearchResults.length > 0 && (
+                                            <div className="absolute z-10 w-full bg-white mt-1 rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
+                                                {seriesSearchResults.map((series) => (
                                                     <div
-                                                        key={idx}
-                                                        className="p-2 hover:bg-gray-100 cursor-pointer border-b border-gray-100 last:border-0"
-                                                        onClick={() => selectMetadata(meta)}
+                                                        key={`${series.source}-${series.externalMangaId}`}
+                                                        className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
+                                                        onClick={() => {
+                                                            setForm({
+                                                                ...form,
+                                                                source: series.source,
+                                                                externalMangaId: series.externalMangaId,
+                                                                // Use formatting if needed, or just let user override displayName later
+                                                            });
+                                                            setMenuTitle(series.title);
+                                                            setShowSeriesDropdown(false);
+                                                        }}
                                                     >
-                                                        <div className="font-medium text-gray-900">{meta.title}</div>
-                                                        <div className="text-xs text-gray-500 flex justify-between">
-                                                            <span>Seeds: {meta.seedCount} • Chapters: {meta.chapterCount}</span>
-                                                            <span className="bg-gray-100 px-1 rounded text-gray-600">ID: {meta.seriesId}</span>
+                                                        <div className="font-medium text-gray-900">{series.title}</div>
+                                                        <div className="text-xs text-gray-500">
+                                                            {series.source === 0 ? 'MangaDex' : series.source === 1 ? 'AniList' : 'MAL'} • {series.externalMangaId}
+                                                            {series.seriesId ? ' • Registered' : ' • New'}
                                                         </div>
                                                     </div>
                                                 ))}
-                                                <div
-                                                    className="p-2 bg-gray-50 text-center text-xs text-blue-600 cursor-pointer hover:bg-gray-100 border-t border-gray-200"
-                                                    onClick={() => setShowMetadataDropdown(false)}
-                                                >
-                                                    Close Search
-                                                </div>
+                                            </div>
+                                        )}
+                                        {isSearchingSeries && (
+                                            <div className="absolute right-3 top-9">
+                                                <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
                                             </div>
                                         )}
                                     </div>
@@ -479,8 +444,6 @@ export default function ImportChapter() {
                                         />
                                     </div>
 
-
-
                                     <div className="relative">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Chapter Number {batchReviewMode && '(Default / Override)'}</label>
                                         <input
@@ -488,39 +451,11 @@ export default function ImportChapter() {
                                             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100"
                                             value={chapterInputValue}
                                             onChange={e => handleChapterChange(e.target.value)}
-                                            onFocus={() => { if (availableChapters.length > 0) setShowChapterDropdown(true); }}
                                             placeholder="Select or type chapter number"
                                             required={!batchReviewMode}
                                             disabled={batchReviewMode}
                                             autoComplete="off"
                                         />
-                                        {isLoadingChapters && (
-                                            <div className="absolute right-3 top-9">
-                                                <div className="animate-spin h-4 w-4 border-2 border-blue-500 rounded-full border-t-transparent"></div>
-                                            </div>
-                                        )}
-
-                                        {showChapterDropdown && availableChapters.length > 0 && (
-                                            <div className="absolute z-10 w-full mt-1 bg-white border border-gray-200 rounded-md shadow-lg max-h-60 overflow-y-auto">
-                                                {availableChapters
-                                                    .filter(ch => ch.chapterNumber.includes(chapterInputValue))
-                                                    .map((ch) => (
-                                                        <div
-                                                            key={ch.chapterId}
-                                                            className="p-3 hover:bg-gray-50 cursor-pointer flex items-center justify-between border-b border-gray-100 last:border-0"
-                                                            onClick={() => selectChapter(ch)}
-                                                        >
-                                                            <span className="font-medium">Ch. {ch.chapterNumber}</span>
-                                                        </div>
-                                                    ))}
-                                                <div
-                                                    className="p-2 bg-gray-50 text-center text-xs text-blue-600 cursor-pointer hover:bg-gray-100 border-t border-gray-200"
-                                                    onClick={() => setShowChapterDropdown(false)}
-                                                >
-                                                    Close List
-                                                </div>
-                                            </div>
-                                        )}
                                     </div>
 
                                     <div className="col-span-2">

@@ -40,7 +40,20 @@ namespace MangaMesh.Server.Controllers
             [FromBody] ImportChapterRequestDto request)
         {
 
-            var result = await _importer.ImportAsync(request);
+            ImportResultDto result;
+            try
+            {
+                result = await _importer.ImportAsync(request);
+            }
+            catch (InvalidOperationException ex) when (ex.Message.Contains("Manifest already exists"))
+            {
+                return Conflict(new { message = ex.Message });
+            }
+            catch (Exception ex)
+            {
+                // General error
+                return BadRequest(ex.Message);
+            }
 
             if (!Directory.Exists(_inputDirectory))
             {

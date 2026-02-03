@@ -3,6 +3,8 @@ using MangaMesh.Client.Models;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 
+using MangaMesh.Server.Services;
+
 namespace MangaMesh.Server.Controllers
 {
     [Route("api/[controller]")]
@@ -13,12 +15,16 @@ namespace MangaMesh.Server.Controllers
 
         private readonly IKeyStore _keyStore;
 
+        private readonly IChallengeService _challengeService;
+
         public KeysController(
             IKeyPairService keyPairService,
-            IKeyStore keyStore)
+            IKeyStore keyStore,
+            IChallengeService challengeService)
         {
             _keyPairService = keyPairService;
             _keyStore = keyStore;
+            _challengeService = challengeService;
         }
 
         [HttpPost("generate")]
@@ -46,6 +52,52 @@ namespace MangaMesh.Server.Controllers
 
             return Results.Ok(signature);
         }
-       
+
+        [HttpPost("{publicKey}/challenges")]
+        public IResult RequestChallenge(string publicKey)
+        {
+            var (id, nonce) = _challengeService.CreateChallenge(publicKey);
+
+            return Results.Ok(new
+            {
+                challengeId = id,
+                nonce = nonce,
+                expiresAt = DateTime.UtcNow.AddMinutes(5)
+            });
+        }
+
+        [HttpPost("{publicKey}/challenges/{challengeId}/verify")]
+        public IResult VerifySignature(string publicKey, string challengeId, [FromBody] VerifySignatureRequest request)
+        {
+            // Sanitize: Fix URL encoding where + might be treated as space
+            var sanitizedPublicKey = publicKey.Replace(" ", "+");
+
+            Console.WriteLine($"[KeysController] Verifying: Key={sanitizedPublicKey}, Challenge={challengeId}");
+
+            var nonce = _challengeService.GetNonce(challengeId);
+            if (nonce == null)
+            {
+                Console.WriteLine("[KeysController] Challenge not found");
+                return Results.NotFound("Challenge not found or expired");
+            }
+
+            var isValid = _keyPairService.Verify(sanitizedPublicKey, request.SignatureBase64, nonce);
+
+            if (isValid)
+            {
+                _challengeService.Remove(challengeId);
+                return Results.Ok(new { valid = true });
+            }
+
+            Console.WriteLine("[KeysController] Verification Failed");
+            return Results.BadRequest(new { valid = false, error = "Invalid signature" });
+        }
+
+        public class VerifySignatureRequest
+        {
+            public string ChallengeId { get; set; }
+            public string SignatureBase64 { get; set; }
+        }
+
     }
 }

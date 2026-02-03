@@ -18,7 +18,10 @@ namespace MangaMesh.Client.Models
         public string SeriesId { get; init; } = string.Empty;
         public string ChapterId { get; init; } = string.Empty;
         public string Chapter { get; init; } = string.Empty;
+        public string? Volume { get; init; }
         public int ChapterNumber { get; init; }
+        public MangaMesh.Shared.Models.ExternalMetadataSource Source { get; init; }
+        public string ExternalMangaId { get; init; } = string.Empty;
         public string Title { get; init; } = string.Empty;
 
         // Release-specific metadata

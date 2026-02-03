@@ -31,6 +31,11 @@ export default defineConfig({
         target: 'https://localhost:7124',
         changeOrigin: true,
         secure: false
+      },
+      '^/api/node': {
+        target: 'https://localhost:7124',
+        changeOrigin: true,
+        secure: false
       }
     }
   }

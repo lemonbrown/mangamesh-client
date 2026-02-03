@@ -92,6 +92,9 @@ namespace MangaMesh.Client.Implementations
                 SeriesId = announcement.SeriesId,
                 ChapterId = announcement.ChapterId,
                 Chapter = announcement.Chapter,
+                Volume = announcement.Volume,
+                Source = announcement.Source,
+                ExternalMangaId = announcement.ExternalMangaId,
                 Title = announcement.Title,
                 Language = announcement.Language,
                 ScanGroup = announcement.ScanGroup,
@@ -109,9 +112,10 @@ namespace MangaMesh.Client.Implementations
             if (response.IsSuccessStatusCode)
                 return;
 
-            // Duplicate announcement is OK (idempotent)
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
-                return;
+            {
+                throw new InvalidOperationException("Manifest already exists on the tracker.");
+            }
 
             var error = await response.Content.ReadAsStringAsync(ct);
 
@@ -130,6 +134,39 @@ namespace MangaMesh.Client.Implementations
             {
                 return false;
             }
+        }
+
+        public async Task<string> RegisterSeriesAsync(MangaMesh.Shared.Models.ExternalMetadataSource source, string externalMangaId)
+        {
+            var request = new
+            {
+                Source = source,
+                ExternalMangaId = externalMangaId
+            };
+
+            var response = await _httpClient.PostAsJsonAsync("/api/series/register", request);
+            response.EnsureSuccessStatusCode();
+
+            var result = await response.Content.ReadFromJsonAsync<RegisterSeriesResponse>();
+            return result?.SeriesId ?? throw new InvalidOperationException("Failed to register series: Empty response");
+        }
+
+        private class RegisterSeriesResponse
+        {
+            public string SeriesId { get; set; } = "";
+            public string Title { get; set; } = "";
+        }
+        public async Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null)
+        {
+            var url = $"/api/series?q={Uri.EscapeDataString(query ?? "")}";
+            if (!string.IsNullOrEmpty(sort))
+            {
+                url += $"&sort={Uri.EscapeDataString(sort)}";
+            }
+            var response = await _httpClient.GetAsync(url);
+            response.EnsureSuccessStatusCode();
+            return await response.Content.ReadFromJsonAsync<IEnumerable<SeriesSummaryResponse>>()
+                   ?? Enumerable.Empty<SeriesSummaryResponse>();
         }
     }
 }

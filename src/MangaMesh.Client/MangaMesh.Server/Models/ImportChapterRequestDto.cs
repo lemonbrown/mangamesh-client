@@ -7,7 +7,9 @@
         int ChapterNumber,
         string SourcePath,
         string DisplayName,
-        string ReleaseType
+        string ReleaseType,
+        MangaMesh.Shared.Models.ExternalMetadataSource Source,
+        string ExternalMangaId
     );
 
 }

@@ -1,4 +1,5 @@
-﻿using System;
+﻿using MangaMesh.Shared.Models;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Security.Cryptography;
@@ -42,7 +43,7 @@ namespace MangaMesh.Client.Models
             var sb = new StringBuilder();
             sb.Append(manifest.SeriesId);
             sb.Append('|');
-            sb.Append(manifest.ReleaseLine.ScanlatorId);
+            sb.Append(manifest.ScanGroup);
             sb.Append('|');
             sb.Append(manifest.Language);
             sb.Append('|');
@@ -50,13 +51,11 @@ namespace MangaMesh.Client.Models
             sb.Append('|');
 
             // Step 2: sort file paths to guarantee deterministic hash
-            foreach (var filePath in manifest.FilePaths.OrderBy(f => f))
+            foreach (var filePath in manifest.Files.OrderBy(f => f))
             {
                 sb.Append(filePath);
                 sb.Append('|');
             }
-
-            sb.Append(manifest.ReleaseLine);
 
             // Step 3: convert to bytes
             var bytes = Encoding.UTF8.GetBytes(sb.ToString());

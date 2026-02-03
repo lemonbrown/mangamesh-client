@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using MangaMesh.Shared.Models;
 
 namespace MangaMesh.Client.Models
 {
@@ -50,6 +51,9 @@ namespace MangaMesh.Client.Models
         /// NOTE: this probably does not live here, but will for now
         /// </summary>
         public string NodeId { get; set; } = "";
+
+        public ExternalMetadataSource Source { get; set; }
+        public string ExternalMangaId { get; set; } = string.Empty;
     }
 
 }

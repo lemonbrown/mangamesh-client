@@ -40,7 +40,10 @@ builder.Services
         .AddScoped<IKeyPairService, KeyPairService>()
         .AddScoped<IKeyStore, KeyStore>()
         .AddScoped<MangaMesh.Server.Services.IImportChapterService, ImportChapterServiceWrapper>()
-        .AddSingleton<INodeConnectionInfoProvider, ServerNodeConnectionInfoProvider>();
+        .AddSingleton<INodeConnectionInfoProvider, ServerNodeConnectionInfoProvider>()
+        .AddSingleton<IChallengeService, ChallengeService>();
+
+builder.Services.AddMemoryCache();
 
 builder.Services.AddHostedService<ReplicationService>();
 
@@ -57,6 +60,20 @@ builder.Services.AddHttpClient<ITrackerClient, TrackerClient>(client =>
 {
     var handler = new HttpClientHandler();
     // Allow self-signed certs in development (e.g. Docker to Host)
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+    return handler;
+});
+
+builder.Services.AddHttpClient("TrackerProxy", client =>
+{
+    client.BaseAddress = new Uri(trackerUrl);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
     if (builder.Environment.IsDevelopment())
     {
         handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
@@ -81,6 +98,8 @@ app.UseAuthorization();
 
 app.UseDefaultFiles();
 app.UseStaticFiles();
+
+app.UseMiddleware<MangaMesh.Server.Middleware.TrackerProxyMiddleware>();
 
 app.MapControllers();
 app.MapFallbackToFile("index.html");

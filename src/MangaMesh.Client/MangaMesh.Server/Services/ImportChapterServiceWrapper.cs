@@ -30,7 +30,9 @@ namespace MangaMesh.Server.Services
                     "Raw" => ReleaseType.Raw,
                     _ => ReleaseType.Unknown
                 },
-                DisplayName = request.DisplayName
+                DisplayName = request.DisplayName,
+                Source = request.Source,
+                ExternalMangaId = request.ExternalMangaId
             }, ct);
 
             return new ImportResultDto(

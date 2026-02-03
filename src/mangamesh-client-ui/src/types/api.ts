@@ -18,6 +18,8 @@ export interface ImportChapterRequest {
     sourcePath: string;
     displayName: string;
     releaseType: string;
+    source: number; // 0=MangaDex, 1=AniList, 2=MAL
+    externalMangaId: string;
 }
 
 export interface StorageStats {
@@ -49,9 +51,11 @@ export interface ChapterMetadata {
 export interface SeriesSearchResult {
     seriesId: string;
     title: string;
-    seedCount: number;
-    chapterCount: number;
-    lastUploadedAt: string; // ISO Date
+    seedCount?: number;
+    chapterCount?: number;
+    lastUploadedAt?: string; // ISO Date
+    source: number;
+    externalMangaId: string;
 }
 
 export interface SeriesDetailsResponse {

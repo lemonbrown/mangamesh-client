@@ -69,45 +69,41 @@ namespace MangaMesh.Client.Services
                 pageHashes.Add(blobHash);
             }
 
-            var manifest = new ChapterManifest
-            {
-                SeriesId = request.SeriesId,
-                ReleaseLine = new ReleaseLineId(request.ScanlatorId, request.SeriesId, request.Language),
-                Language = request.Language,
-                ChapterNumber = request.ChapterNumber,
-                FilePaths = files.ToList(),
-                Pages = pageHashes
-            };
+            // Step 2.1: Register Series to get authoritative ID
+            var seriesId = await _trackerClient.RegisterSeriesAsync(request.Source, request.ExternalMangaId);
 
             // Step 3: compute hash for the manifest
-            var hash = ManifestHash.FromManifest(manifest);
 
-            var isManifestExisting = await _manifestStore.ExistsAsync(ManifestHash.FromManifest(manifest));
+            var totalSize = files.Sum(f => new FileInfo(f).Length);
+
+
+            var keyPair = await _keyStore.GetAsync();
+
+
+            Shared.Models.ChapterManifest chapterManifest = new()
+            {
+                ChapterNumber = request.ChapterNumber,
+                CreatedUtc = new DateTime(DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond * TimeSpan.TicksPerMillisecond, DateTimeKind.Utc),
+                ChapterId = request.SeriesId + ":" + request.ChapterNumber.ToString(),
+                Language = request.Language,
+                SeriesId = request.SeriesId,
+                ScanGroup = request.ScanlatorId,
+                Title = request.DisplayName,
+                TotalSize = totalSize,
+                PublicKey = keyPair.PublicKeyBase64,
+                SignedBy = "self"
+            };
+
+            var hash = ManifestHash.FromManifest(chapterManifest);
+
+            var isManifestExisting = await _manifestStore.ExistsAsync(hash);
 
             if (!isManifestExisting)
             {
                 // Step 4: save manifest
-                await _manifestStore.SaveAsync(hash, manifest);
+                await _manifestStore.SaveAsync(hash, chapterManifest);
 
                 // Step 5: publish manifest to trackers
-
-                // Step 5.1 sign the manifest
-
-                var totalSize = files.Sum(f => new FileInfo(f).Length);
-
-                Shared.Models.ChapterManifest chapterManifest = new()
-                {
-                    Chapter = manifest.ChapterNumber.ToString(),
-                    CreatedUtc = DateTime.UtcNow,
-                    ChapterId = request.SeriesId + ":" + manifest.ChapterNumber.ToString(),
-                    Language = request.Language,
-                    SeriesId = request.SeriesId,
-                    ScanGroup = request.ScanlatorId,
-                    Title = "",
-                    TotalSize = totalSize,
-                };
-
-                var keyPair = await _keyStore.GetAsync();
 
                 byte[] privateKeyBytes = Convert.FromBase64String(keyPair.PrivateKeyBase64);
 
@@ -124,15 +120,17 @@ namespace MangaMesh.Client.Services
                 {
                     NodeId = _nodeIdentity.NodeId,
                     ManifestHash = hash,
-                    SeriesId = manifest.SeriesId,
-                    ChapterNumber = manifest.ChapterNumber,
-                    Language = manifest.Language,
-                    ScanlatorId = manifest.ReleaseLine.ScanlatorId,
+                    SeriesId = chapterManifest.SeriesId,
+                    ChapterNumber = chapterManifest.ChapterNumber,
+                    Language = chapterManifest.Language,
+                    ScanlatorId = chapterManifest.ScanGroup,
                     ReleaseType = request.ReleaseType,
+                    Source = request.Source,
+                    ExternalMangaId = request.ExternalMangaId,
 
                     // Added fields for verification
                     ChapterId = chapterManifest.ChapterId,
-                    Chapter = chapterManifest.Chapter,
+                    Chapter = chapterManifest.ChapterNumber.ToString(),
                     Title = chapterManifest.Title,
                     ScanGroup = chapterManifest.ScanGroup,
                     TotalSize = chapterManifest.TotalSize,
@@ -150,21 +148,26 @@ namespace MangaMesh.Client.Services
                 // Note: The manifest stored is Client.Models.ChapterManifest.
                 // We need to map the fields back.
 
-                manifest = manifest with
-                {
-                    ChapterId = chapterManifest.ChapterId,
-                    Chapter = chapterManifest.Chapter,
-                    Title = chapterManifest.Title,
-                    ScanGroup = chapterManifest.ScanGroup,
-                    TotalSize = chapterManifest.TotalSize,
-                    CreatedUtc = chapterManifest.CreatedUtc,
-                    Signature = signedManifest.Signature,
-                    PublicKey = signedManifest.PublisherPublicKey,
-                    SignedBy = "self" // or some logic
-                };
+                //manifest = manifest with
+                //{
+                //    ChapterId = chapterManifest.ChapterId,
+                //    Chapter = chapterManifest.Chapter,
+                //    Title = chapterManifest.Title,
+                //    ScanGroup = chapterManifest.ScanGroup,
+                //    TotalSize = chapterManifest.TotalSize,
+                //    CreatedUtc = chapterManifest.CreatedUtc,
+                //    Signature = signedManifest.Signature,
+                //    PublicKey = signedManifest.PublisherPublicKey,
+                //    SignedBy = "self" // or some logic
+                //};
 
                 // Re-save with signature
-                await _manifestStore.SaveAsync(hash, manifest);
+                chapterManifest = chapterManifest with
+                {
+                    Signature = signedManifest.Signature
+                };
+
+                await _manifestStore.SaveAsync(hash, chapterManifest);
             }
 
             // Step 6: return result
@@ -192,12 +195,12 @@ namespace MangaMesh.Client.Services
                 SeriesId = manifest.SeriesId,
                 ChapterNumber = manifest.ChapterNumber,
                 Language = manifest.Language,
-                ScanlatorId = manifest.ReleaseLine.ScanlatorId,
+                ScanlatorId = manifest.ScanGroup,
                 ReleaseType = ReleaseType.VerifiedScanlation, // Assuming VerifiedScanlation for signed manifests
 
                 // Verification fields
                 ChapterId = manifest.ChapterId,
-                Chapter = manifest.Chapter,
+                Chapter = manifest.ChapterNumber.ToString(),
                 Title = manifest.Title,
                 ScanGroup = manifest.ScanGroup,
                 TotalSize = manifest.TotalSize,

@@ -12,5 +12,7 @@ namespace MangaMesh.Client.Abstractions
         public Task<KeyPairResult> GenerateKeyPairBase64Async();
 
         string SolveChallenge(string nonceBase64, string privateKeyBase64);
+
+        bool Verify(string publicKeyBase64, string signatureBase64, string nonceBase64);
     }
 }

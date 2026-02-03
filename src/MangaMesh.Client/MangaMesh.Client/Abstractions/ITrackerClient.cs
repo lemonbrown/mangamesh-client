@@ -24,5 +24,9 @@ namespace MangaMesh.Client.Abstractions
         public Task AnnounceManifestAsync(
          AnnounceManifestRequest announcement,
          CancellationToken ct = default);
+
+        Task<string> RegisterSeriesAsync(MangaMesh.Shared.Models.ExternalMetadataSource source, string externalMangaId);
+
+        Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null);
     }
 }

@@ -1,4 +1,5 @@
 ﻿using MangaMesh.Client.Models;
+using MangaMesh.Shared.Models;
 using System;
 using System.Collections.Generic;
 using System.Linq;

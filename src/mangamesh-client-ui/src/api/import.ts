@@ -25,7 +25,12 @@ export async function importChapter(request: ImportChapterRequest): Promise<void
     });
 
     if (!response.ok) {
-        throw new Error(`Import failed: ${response.statusText}`);
+        let message = response.statusText;
+        try {
+            const error = await response.json();
+            if (error.message) message = error.message;
+        } catch { }
+        throw new Error(message);
     }
 }
 

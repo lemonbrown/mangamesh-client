@@ -3,8 +3,10 @@ import type { NodeStatus, Subscription, StorageStats, ChapterSummary, ChapterMet
 export const mockNodeStatus: NodeStatus = {
     nodeId: "mock-node-12345",
     peerCount: 42,
-    seededManifests: 156,
-    storageUsedMb: 12450
+    seededManifests: 12,
+    storageUsedMb: 450,
+    isConnected: true,
+    lastPingUtc: new Date().toISOString()
 };
 
 export const mockStorageStats: StorageStats = {

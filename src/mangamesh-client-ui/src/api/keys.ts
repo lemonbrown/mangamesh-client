@@ -1,6 +1,6 @@
 import type { KeyPair, KeyChallenge, VerifySignatureResponse } from '../types/api';
 
-const AUTH_API_BASE = '/api/auth/keys';
+const AUTH_API_BASE = '/api/keys';
 const CRYPTO_SERVICE_BASE = '/api/keys';
 
 export async function getKeys(): Promise<KeyPair> {
@@ -40,7 +40,7 @@ export async function solveChallenge(nonceBase64: string, privateKeyBase64: stri
         body: JSON.stringify({ nonceBase64, privateKeyBase64 })
     });
     if (!response.ok) throw new Error(`Failed to solve challenge: ${response.statusText}`);
-    return await response.text();
+    return await response.json();
 }
 
 export async function verifySignature(publicKeyBase64: string, challengeId: string, signatureBase64: string): Promise<VerifySignatureResponse> {

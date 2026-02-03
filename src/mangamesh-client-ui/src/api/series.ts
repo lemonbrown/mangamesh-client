@@ -1,11 +1,14 @@
 import type { SeriesSearchResult, SeriesDetailsResponse, ChapterSummaryResponse, ChapterDetailsResponse } from '../types/api';
 
-export async function searchSeries(q: string, limit: number = 20, offset: number = 0): Promise<SeriesSearchResult[]> {
+export async function searchSeries(q: string, limit: number = 20, offset: number = 0, sort?: string): Promise<SeriesSearchResult[]> {
     const params = new URLSearchParams({
         q,
         limit: limit.toString(),
         offset: offset.toString()
     });
+    if (sort) {
+        params.append('sort', sort);
+    }
     const response = await fetch(`/api/Series?${params.toString()}`);
     if (!response.ok) {
         throw new Error(`Failed to search series: ${response.statusText}`);
