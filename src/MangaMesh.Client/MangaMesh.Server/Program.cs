@@ -7,7 +7,7 @@ var dataPath = Path.Combine(AppContext.BaseDirectory, "input");
 
 var builder = WebApplication.CreateBuilder(args);
 
-var trackerUrl = "https://localhost:7030";
+var trackerUrl = builder.Configuration["TrackerUrl"] ?? "https://localhost:7030";
 
 // Add services to the container.
 
@@ -52,6 +52,16 @@ builder.Services.AddHttpClient<IMetadataClient, HttpMetadataClient>(client =>
 builder.Services.AddHttpClient<ITrackerClient, TrackerClient>(client =>
 {
     client.BaseAddress = new Uri(trackerUrl);
+})
+.ConfigurePrimaryHttpMessageHandler(() =>
+{
+    var handler = new HttpClientHandler();
+    // Allow self-signed certs in development (e.g. Docker to Host)
+    if (builder.Environment.IsDevelopment())
+    {
+        handler.ServerCertificateCustomValidationCallback = HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+    }
+    return handler;
 });
 
 var app = builder.Build();
@@ -69,6 +79,10 @@ app.UseCors("AllowAll");
 
 app.UseAuthorization();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+
 app.MapControllers();
+app.MapFallbackToFile("index.html");
 
 app.Run();
