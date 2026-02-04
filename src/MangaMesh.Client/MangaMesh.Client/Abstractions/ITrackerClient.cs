@@ -28,5 +28,11 @@ namespace MangaMesh.Client.Abstractions
         Task<string> RegisterSeriesAsync(MangaMesh.Shared.Models.ExternalMetadataSource source, string externalMangaId);
 
         Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null);
+        Task<TrackerStats> GetStatsAsync();
+    }
+
+    public class TrackerStats
+    {
+        public int NodeCount { get; set; }
     }
 }

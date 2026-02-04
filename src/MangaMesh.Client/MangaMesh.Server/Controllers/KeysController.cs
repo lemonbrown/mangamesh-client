@@ -53,10 +53,10 @@ namespace MangaMesh.Server.Controllers
             return Results.Ok(signature);
         }
 
-        [HttpPost("{publicKey}/challenges")]
-        public IResult RequestChallenge(string publicKey)
+        [HttpPost("challenges")]
+        public IResult RequestChallenge([FromBody] CreateChallengeRequest request)
         {
-            var (id, nonce) = _challengeService.CreateChallenge(publicKey);
+            var (id, nonce) = _challengeService.CreateChallenge(request.PublicKey);
 
             return Results.Ok(new
             {
@@ -66,26 +66,23 @@ namespace MangaMesh.Server.Controllers
             });
         }
 
-        [HttpPost("{publicKey}/challenges/{challengeId}/verify")]
-        public IResult VerifySignature(string publicKey, string challengeId, [FromBody] VerifySignatureRequest request)
+        [HttpPost("challenges/verify")]
+        public IResult VerifySignature([FromBody] VerifySignatureRequest request)
         {
-            // Sanitize: Fix URL encoding where + might be treated as space
-            var sanitizedPublicKey = publicKey.Replace(" ", "+");
+            Console.WriteLine($"[KeysController] Verifying: Key={request.PublicKey}, Challenge={request.ChallengeId}");
 
-            Console.WriteLine($"[KeysController] Verifying: Key={sanitizedPublicKey}, Challenge={challengeId}");
-
-            var nonce = _challengeService.GetNonce(challengeId);
+            var nonce = _challengeService.GetNonce(request.ChallengeId);
             if (nonce == null)
             {
                 Console.WriteLine("[KeysController] Challenge not found");
                 return Results.NotFound("Challenge not found or expired");
             }
 
-            var isValid = _keyPairService.Verify(sanitizedPublicKey, request.SignatureBase64, nonce);
+            var isValid = _keyPairService.Verify(request.PublicKey, request.SignatureBase64, nonce);
 
             if (isValid)
             {
-                _challengeService.Remove(challengeId);
+                _challengeService.Remove(request.ChallengeId);
                 return Results.Ok(new { valid = true });
             }
 
@@ -93,10 +90,16 @@ namespace MangaMesh.Server.Controllers
             return Results.BadRequest(new { valid = false, error = "Invalid signature" });
         }
 
+        public class CreateChallengeRequest
+        {
+            public string PublicKey { get; set; }
+        }
+
         public class VerifySignatureRequest
         {
             public string ChallengeId { get; set; }
             public string SignatureBase64 { get; set; }
+            public string PublicKey { get; set; }
         }
 
     }

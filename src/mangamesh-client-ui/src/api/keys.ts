@@ -26,8 +26,10 @@ export async function generateKeys(): Promise<KeyPair> {
 }
 
 export async function requestChallenge(publicKeyBase64: string): Promise<KeyChallenge> {
-    const response = await fetch(`${AUTH_API_BASE}/${encodeURIComponent(publicKeyBase64)}/challenges`, {
-        method: 'POST'
+    const response = await fetch(`${AUTH_API_BASE}/challenges`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ publicKey: publicKeyBase64 })
     });
     if (!response.ok) throw new Error(`Failed to request challenge: ${response.statusText}`);
     return await response.json();
@@ -44,10 +46,10 @@ export async function solveChallenge(nonceBase64: string, privateKeyBase64: stri
 }
 
 export async function verifySignature(publicKeyBase64: string, challengeId: string, signatureBase64: string): Promise<VerifySignatureResponse> {
-    const response = await fetch(`${AUTH_API_BASE}/${encodeURIComponent(publicKeyBase64)}/challenges/${challengeId}/verify`, {
+    const response = await fetch(`${AUTH_API_BASE}/challenges/verify`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ challengeId, signatureBase64 })
+        body: JSON.stringify({ challengeId, signatureBase64, publicKey: publicKeyBase64 })
     });
     if (!response.ok) throw new Error(`Failed to verify signature: ${response.statusText}`);
     return await response.json();

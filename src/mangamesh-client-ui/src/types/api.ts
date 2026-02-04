@@ -1,5 +1,7 @@
 export interface NodeStatus {
     nodeId: string;
+    isConnected: boolean;
+    lastPingUtc: string | null;
     peerCount: number;
     seededManifests: number;
     storageUsedMb: number;
@@ -149,14 +151,4 @@ export interface AnalyzedChapterDto {
     fileCount: number;
 }
 
-export interface NodeStatus {
-    nodeId: string;
-    isConnected: boolean;
-    lastPingUtc: string | null;
-}
 
-export interface NodeStatus {
-    nodeId: string;
-    isConnected: boolean;
-    lastPingUtc: string | null;
-}

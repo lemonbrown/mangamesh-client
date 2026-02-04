@@ -168,5 +168,20 @@ namespace MangaMesh.Client.Implementations
             return await response.Content.ReadFromJsonAsync<IEnumerable<SeriesSummaryResponse>>()
                    ?? Enumerable.Empty<SeriesSummaryResponse>();
         }
+
+        public async Task<TrackerStats> GetStatsAsync()
+        {
+            try
+            {
+                var response = await _httpClient.GetAsync("/stats");
+                if (!response.IsSuccessStatusCode) return new TrackerStats();
+                
+                return await response.Content.ReadFromJsonAsync<TrackerStats>() ?? new TrackerStats();
+            }
+            catch
+            {
+                return new TrackerStats();
+            }
+        }
     }
 }
