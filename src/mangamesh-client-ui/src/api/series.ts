@@ -1,4 +1,12 @@
-import type { SeriesSearchResult, SeriesDetailsResponse, ChapterSummaryResponse, ChapterDetailsResponse } from '../types/api';
+import type { SeriesSearchResult, SeriesDetailsResponse, ChapterSummaryResponse, ChapterDetailsResponse, MangaMetadata, FullChapterManifest } from '../types/api';
+
+export async function searchMetadata(query: string): Promise<MangaMetadata[]> {
+    const response = await fetch(`/api/mangametadata/search?query=${encodeURIComponent(query)}`);
+    if (!response.ok) {
+        throw new Error('Failed to search metadata');
+    }
+    return await response.json();
+}
 
 export async function searchSeries(q: string, limit: number = 20, offset: number = 0, sort?: string): Promise<SeriesSearchResult[]> {
     const params = new URLSearchParams({
@@ -36,6 +44,14 @@ export async function getChapterDetails(seriesId: string, chapterId: string): Pr
     const response = await fetch(`/api/Series/${encodeURIComponent(seriesId)}/chapters/${encodeURIComponent(chapterId)}`);
     if (!response.ok) {
         throw new Error(`Failed to fetch chapter details: ${response.statusText}`);
+    }
+    return await response.json();
+}
+
+export async function readChapter(seriesId: string, chapterId: string, manifestHash: string): Promise<FullChapterManifest> {
+    const response = await fetch(`/api/Series/${encodeURIComponent(seriesId)}/chapter/${encodeURIComponent(chapterId)}/manifest/${encodeURIComponent(manifestHash)}/read`);
+    if (!response.ok) {
+        throw new Error(`Failed to read chapter: ${response.statusText}`);
     }
     return await response.json();
 }

@@ -20,7 +20,7 @@ namespace MangaMesh.Server.Controllers
             _blobStore = blobStore;
         }
 
-        [HttpGet(Name = "GetBlobByHash")]
+        [HttpGet("{hash}", Name = "GetBlobByHash")]
         public async Task<IResult> GetByHashAsync(string hash)
         {
             var blobHash = new BlobHash(hash);

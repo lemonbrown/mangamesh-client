@@ -8,23 +8,20 @@ using MangaMesh.Server.Services;
 namespace MangaMesh.Server.Controllers
 {
     [Route("api/[controller]")]
-    [ApiController]
     public class KeysController : ControllerBase
     {
         private readonly IKeyPairService _keyPairService;
-
         private readonly IKeyStore _keyStore;
-
-        private readonly IChallengeService _challengeService;
+        private readonly ITrackerClient _trackerClient;
 
         public KeysController(
             IKeyPairService keyPairService,
             IKeyStore keyStore,
-            IChallengeService challengeService)
+            ITrackerClient trackerClient)
         {
             _keyPairService = keyPairService;
             _keyStore = keyStore;
-            _challengeService = challengeService;
+            _trackerClient = trackerClient;
         }
 
         [HttpPost("generate")]
@@ -46,7 +43,7 @@ namespace MangaMesh.Server.Controllers
         }
 
         [HttpPost("challenge/solve")]
-        public async Task<IResult> SolveChallenge(KeyChallengeRequest request)
+        public IResult SolveChallenge([FromBody] KeyChallengeRequest request)
         {
             var signature = _keyPairService.SolveChallenge(request.NonceBase64, request.PrivateKeyBase64);
 
@@ -54,52 +51,47 @@ namespace MangaMesh.Server.Controllers
         }
 
         [HttpPost("challenges")]
-        public IResult RequestChallenge([FromBody] CreateChallengeRequest request)
+        public async Task<IResult> RequestChallenge([FromBody] CreateChallengeRequest request)
         {
-            var (id, nonce) = _challengeService.CreateChallenge(request.PublicKey);
-
-            return Results.Ok(new
+            // Proxy to Tracker
+            try
             {
-                challengeId = id,
-                nonce = nonce,
-                expiresAt = DateTime.UtcNow.AddMinutes(5)
-            });
+                var response = await _trackerClient.CreateChallengeAsync(request.PublicKey);
+                return Results.Ok(response);
+            }
+            catch (Exception ex)
+            {
+                return Results.Problem($"Failed to request challenge from tracker: {ex.Message}");
+            }
         }
 
         [HttpPost("challenges/verify")]
-        public IResult VerifySignature([FromBody] VerifySignatureRequest request)
+        public async Task<IResult> VerifySignature([FromBody] VerifySignatureRequest request)
         {
-            Console.WriteLine($"[KeysController] Verifying: Key={request.PublicKey}, Challenge={request.ChallengeId}");
-
-            var nonce = _challengeService.GetNonce(request.ChallengeId);
-            if (nonce == null)
+            // Proxy to Tracker
+            try
             {
-                Console.WriteLine("[KeysController] Challenge not found");
-                return Results.NotFound("Challenge not found or expired");
+                var response = await _trackerClient.VerifyChallengeAsync(request.PublicKey, request.ChallengeId, request.SignatureBase64);
+                return Results.Ok(response);
             }
-
-            var isValid = _keyPairService.Verify(request.PublicKey, request.SignatureBase64, nonce);
-
-            if (isValid)
+            catch (Exception ex)
             {
-                _challengeService.Remove(request.ChallengeId);
-                return Results.Ok(new { valid = true });
+                // If verification failed with exception, it might be 400 or network error
+                // We return bad request or similar
+                return Results.BadRequest(new { valid = false, error = ex.Message });
             }
-
-            Console.WriteLine("[KeysController] Verification Failed");
-            return Results.BadRequest(new { valid = false, error = "Invalid signature" });
         }
 
         public class CreateChallengeRequest
         {
-            public string PublicKey { get; set; }
+            public string PublicKey { get; set; } = "";
         }
 
         public class VerifySignatureRequest
         {
-            public string ChallengeId { get; set; }
-            public string SignatureBase64 { get; set; }
-            public string PublicKey { get; set; }
+            public string ChallengeId { get; set; } = "";
+            public string SignatureBase64 { get; set; } = "";
+            public string PublicKey { get; set; } = "";
         }
 
     }

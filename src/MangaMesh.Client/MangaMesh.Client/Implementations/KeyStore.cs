@@ -5,7 +5,7 @@ using MangaMesh.Shared.Stores;
 namespace MangaMesh.Client.Implementations
 {
     public class KeyStore : IKeyStore
-    {       
+    {
         public async Task SaveAsync(string publicKeyBase64, string privateKeyBase64)
         {
 
@@ -18,7 +18,7 @@ namespace MangaMesh.Client.Implementations
             //await JsonFileStore.SaveAsync(AppContext.BaseDirectory + "\\data\\keys\\public_key.json", key);            
         }
 
-        public async Task<PublicPrivateKeyPair> GetAsync()
+        public async Task<PublicPrivateKeyPair?> GetAsync()
         {
             //var key = await JsonFileStore.LoadSingleAsync<PublicKey>(AppContext.BaseDirectory + "\\data\\keys\\public_key.json");
 

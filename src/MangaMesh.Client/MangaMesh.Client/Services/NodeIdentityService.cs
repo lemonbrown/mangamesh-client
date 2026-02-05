@@ -1,4 +1,5 @@
 using MangaMesh.Client.Abstractions;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
@@ -14,10 +15,16 @@ namespace MangaMesh.Client.Services
         public bool IsConnected { get; private set; }
         public DateTime? LastPingUtc { get; private set; }
 
-        public NodeIdentityService(ILogger<NodeIdentityService> logger)
+
+        private readonly IServiceScopeFactory _scopeFactory;
+        private readonly ILogger<NodeIdentityService> _logger;
+
+        public NodeIdentityService(IServiceScopeFactory scopeFactory, ILogger<NodeIdentityService> logger)
         {
+            _scopeFactory = scopeFactory;
+            _logger = logger;
             NodeId = Guid.NewGuid().ToString("N");
-            logger.LogInformation("Generated in-memory NodeId: {NodeId}", NodeId);
+            _logger.LogInformation("Generated in-memory NodeId: {NodeId}", NodeId);
         }
 
         public void UpdateStatus(bool isConnected)
@@ -28,5 +35,6 @@ namespace MangaMesh.Client.Services
                 LastPingUtc = DateTime.UtcNow;
             }
         }
+
     }
 }

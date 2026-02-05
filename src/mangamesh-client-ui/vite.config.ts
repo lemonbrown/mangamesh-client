@@ -12,7 +12,12 @@ export default defineConfig({
         secure: false
       },
       '^/api/Series': {
-        target: 'https://localhost:7030',
+        target: 'https://localhost:7124',
+        changeOrigin: true,
+        secure: false
+      },
+      '^/api/blob': {
+        target: 'https://localhost:7124',
         changeOrigin: true,
         secure: false
       },
@@ -33,6 +38,11 @@ export default defineConfig({
         secure: false
       },
       '^/api/node': {
+        target: 'https://localhost:7124',
+        changeOrigin: true,
+        secure: false
+      },
+      '^/api/subscriptions': {
         target: 'https://localhost:7124',
         changeOrigin: true,
         secure: false

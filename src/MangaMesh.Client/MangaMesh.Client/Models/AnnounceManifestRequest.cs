@@ -19,7 +19,7 @@ namespace MangaMesh.Client.Models
         public string ChapterId { get; init; } = string.Empty;
         public string Chapter { get; init; } = string.Empty;
         public string? Volume { get; init; }
-        public int ChapterNumber { get; init; }
+        public double ChapterNumber { get; init; }
         public MangaMesh.Shared.Models.ExternalMetadataSource Source { get; init; }
         public string ExternalMangaId { get; init; } = string.Empty;
         public string Title { get; init; } = string.Empty;
@@ -30,11 +30,13 @@ namespace MangaMesh.Client.Models
         public string ScanGroup { get; init; } = string.Empty;
         public long TotalSize { get; init; }
         public DateTime CreatedUtc { get; init; }
+        public List<MangaMesh.Shared.Models.ChapterFileEntry> Files { get; init; } = new();
         public ReleaseType ReleaseType { get; init; }
 
         // Timestamp (useful for rough ordering, not truth)
         public DateTimeOffset AnnouncedAt { get; init; } = DateTimeOffset.UtcNow;
         public string Signature { get; init; } = string.Empty;
         public string PublicKey { get; init; } = string.Empty;
+        public string SignedBy { get; init; } = string.Empty;
     }
 }

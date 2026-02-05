@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import { getSeriesChapters, getSeriesDetails, getChapterDetails } from '../api/series';
-import { getSubscriptions, updateSubscription } from '../api/subscriptions';
+import { getSubscriptions, subscribe, unsubscribe } from '../api/subscriptions';
 import type { ChapterSummaryResponse, Subscription, SeriesDetailsResponse, ChapterManifest } from '../types/api';
 
 export default function SeriesDetails() {
@@ -42,14 +42,30 @@ export default function SeriesDetails() {
                     );
 
                     const manifestsMap: Record<string, ChapterManifest[]> = {};
+                    const titleUpdates: Record<string, string> = {};
+
                     detailsResults.forEach((result, index) => {
                         if (result.status === 'fulfilled') {
                             const chapterId = chapterData[index].chapterId;
-                            manifestsMap[chapterId] = result.value.manifests || (result.value as any).Manifests || [];
+                            const val = result.value;
+                            manifestsMap[chapterId] = val.manifests || (val as any).Manifests || [];
+
+                            const title = val.title || (val as any).Title;
+                            if (title) {
+                                titleUpdates[chapterId] = title;
+                            }
                         }
                     });
 
                     setChapterManifests(manifestsMap);
+
+                    if (Object.keys(titleUpdates).length > 0) {
+                        setChapters(prev => prev.map(ch => ({
+                            ...ch,
+                            title: titleUpdates[ch.chapterId] || ch.title
+                        })));
+                    }
+
                     setManifestsLoading(false);
                 }
             } catch (e) {
@@ -61,39 +77,31 @@ export default function SeriesDetails() {
         load();
     }, [seriesId]);
 
-    async function toggleAutoFetch(scanlatorId: string) {
-        if (!subscription) return;
 
-        const current = new Set(subscription.autoFetchScanlators);
-        if (current.has(scanlatorId)) {
-            current.delete(scanlatorId);
-        } else {
-            current.add(scanlatorId);
-        }
 
-        const newAutoFetch = Array.from(current);
-
-        // Optimistic update
-        const updatedSub = { ...subscription, autoFetchScanlators: newAutoFetch };
-        setSubscription(updatedSub);
-
+    async function handleSubscribeToggle() {
+        if (!seriesId) return;
         try {
-            await updateSubscription(subscription.seriesId, newAutoFetch);
+            if (subscription) {
+                if (confirm('Are you sure you want to unsubscribe?')) {
+                    await unsubscribe(seriesId);
+                    setSubscription(null);
+                }
+            } else {
+                await subscribe(seriesId);
+                // Refresh subscription state
+                const subs = await getSubscriptions();
+                setSubscription(subs.find(s => s.seriesId === seriesId) || null);
+            }
         } catch (e) {
-            alert('Failed to update subscription settings');
-            // Revert on error could be implemented here
+            alert('Failed to update subscription');
         }
     }
 
     if (loading) return <div className="p-8 text-gray-500">Loading chapters...</div>;
     if (error) return <div className="p-8 text-red-500">{error}</div>;
 
-    // Derive unique scanlators from all manifests of all chapters
-    const scanlators = Array.from(new Set(
-        Object.values(chapterManifests).flatMap(manifests =>
-            manifests.map(m => m.scanGroup || (m as any).ScanGroup || 'Unknown')
-        )
-    )).sort();
+
 
     return (
         <div className="space-y-6">
@@ -106,31 +114,23 @@ export default function SeriesDetails() {
                         {seriesInfo?.status && <span>{seriesInfo.status}</span>}
                     </div>
                 </div>
-                <Link to="/subscriptions" className="text-blue-600 hover:underline">
-                    Back to Subscriptions
-                </Link>
+                <div className="flex items-center gap-4">
+                    <button
+                        onClick={handleSubscribeToggle}
+                        className={`px-4 py-2 rounded-md text-sm font-medium transition-colors ${subscription
+                            ? 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-sm'
+                            }`}
+                    >
+                        {subscription ? 'Subscribed' : 'Subscribe'}
+                    </button>
+                    <Link to="/subscriptions" className="text-blue-600 hover:underline text-sm">
+                        Back to Subscriptions
+                    </Link>
+                </div>
             </div>
 
-            {/* Subscription Settings */}
-            {subscription && (
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    <h3 className="font-medium text-blue-900 mb-2">Auto-Fetch Settings</h3>
-                    <div className="flex gap-4 flex-wrap">
-                        {scanlators.map(scanlator => (
-                            <label key={scanlator} className="flex items-center space-x-2 cursor-pointer">
-                                <input
-                                    type="checkbox"
-                                    checked={subscription.autoFetchScanlators.includes(scanlator)}
-                                    onChange={() => toggleAutoFetch(scanlator)}
-                                    className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
-                                />
-                                <span className="text-sm text-gray-700">{scanlator}</span>
-                            </label>
-                        ))}
-                        {scanlators.length === 0 && <span className="text-sm text-gray-500">No scanlators found to configure.</span>}
-                    </div>
-                </div>
-            )}
+
 
             <div className="space-y-4">
                 {chapters.length === 0 ? (

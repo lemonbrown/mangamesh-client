@@ -1,4 +1,4 @@
-import type { ImportChapterRequest, ImportedChapter, AnalyzedChapterDto } from '../types/api';
+import type { ImportChapterRequest, ImportedChapter, AnalyzedChapterDto, ImportChapterResult } from '../types/api';
 
 
 export async function uploadChapters(files: FormData): Promise<AnalyzedChapterDto[]> {
@@ -15,7 +15,7 @@ export async function uploadChapters(files: FormData): Promise<AnalyzedChapterDt
 }
 
 
-export async function importChapter(request: ImportChapterRequest): Promise<void> {
+export async function importChapter(request: ImportChapterRequest): Promise<ImportChapterResult> {
     const response = await fetch('/api/import/chapter', {
         method: 'POST',
         headers: {
@@ -32,6 +32,8 @@ export async function importChapter(request: ImportChapterRequest): Promise<void
         } catch { }
         throw new Error(message);
     }
+
+    return await response.json();
 }
 
 export async function getImportedChapters(): Promise<ImportedChapter[]> {

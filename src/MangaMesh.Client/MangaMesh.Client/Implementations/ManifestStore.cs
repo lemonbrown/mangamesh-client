@@ -41,6 +41,16 @@ namespace MangaMesh.Client.Implementations
             await File.WriteAllTextAsync(path, json);
         }
 
+        public Task DeleteAsync(ManifestHash hash)
+        {
+            var path = GetPath(hash);
+            if (File.Exists(path))
+            {
+                File.Delete(path);
+            }
+            return Task.CompletedTask;
+        }
+
         public Task<bool> ExistsAsync(ManifestHash hash)
             => Task.FromResult(File.Exists(GetPath(hash)));
 

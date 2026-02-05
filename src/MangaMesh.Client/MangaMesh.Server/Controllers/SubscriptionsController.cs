@@ -1,37 +1,64 @@
-﻿using MangaMesh.Server.Models;
-using MangaMesh.Server.Stores;
+﻿using MangaMesh.Client.Abstractions;
+using MangaMesh.Client.Models;
 using Microsoft.AspNetCore.Mvc;
+using System.Threading.Tasks;
 
 namespace MangaMesh.Server.Controllers
 {
-    [ApiController]
     [Route("api/subscriptions")]
+    [ApiController]
     public class SubscriptionsController : ControllerBase
     {
-        private readonly ISubscriptionStore _subscriptions;
+        private readonly ISubscriptionStore _subscriptionStore;
+        private readonly ITrackerClient _trackerClient;
 
-        public SubscriptionsController(ISubscriptionStore subscriptions)
+        public SubscriptionsController(ISubscriptionStore subscriptionStore, ITrackerClient trackerClient)
         {
-            _subscriptions = subscriptions;
+            _subscriptionStore = subscriptionStore;
+            _trackerClient = trackerClient;
         }
 
-        [HttpGet]
-        public async Task<ActionResult<IEnumerable<SubscriptionDto>>> GetAll()
-            => Ok(await _subscriptions.GetAllAsync());
-
-        [HttpPost]
-        public async Task<IActionResult> Add([FromBody] SubscriptionDto dto)
+        [HttpGet("list")]
+        public async Task<ActionResult<IEnumerable<SeriesSubscription>>> GetSubscriptions()
         {
-            var added = await _subscriptions.AddAsync(dto);
-            return added ? NoContent() : Conflict();
+            return Ok(await _subscriptionStore.GetAllAsync());
         }
 
-        [HttpDelete]
-        public async Task<IActionResult> Remove([FromBody] SubscriptionDto dto)
+        [HttpPost("subscribe")]
+        public async Task<ActionResult> Subscribe([FromBody] SeriesSubscription subscription)
         {
-            var removed = await _subscriptions.RemoveAsync(dto);
-            return removed ? NoContent() : NotFound();
+            if (string.IsNullOrWhiteSpace(subscription.SeriesId))
+                return BadRequest("SeriesId is required");
+
+            subscription.SubscribedAt = DateTime.UtcNow;
+            await _subscriptionStore.AddAsync(subscription);
+            return Ok();
+        }
+
+        [HttpPost("unsubscribe")]
+        public async Task<ActionResult> Unsubscribe([FromBody] SeriesSubscription subscription)
+        {
+             if (string.IsNullOrWhiteSpace(subscription.SeriesId))
+                return BadRequest("SeriesId is required");
+
+            await _subscriptionStore.RemoveAsync(subscription);
+            return Ok();
+        }
+
+        [HttpGet("updates")]
+        public async Task<ActionResult<IEnumerable<SeriesSummaryResponse>>> GetUpdates()
+        {
+            var subs = await _subscriptionStore.GetAllAsync();
+            if (!subs.Any())
+                return Ok(new List<SeriesSummaryResponse>());
+
+            var ids = subs.Select(s => s.SeriesId).Distinct().ToArray();
+            
+            // Fetch series details from tracker, sorted by recent activity
+            // Since we implemented 'ids' filtering and 'sort=recent', this works perfectly.
+            var updates = await _trackerClient.SearchSeriesAsync("", "recent", ids);
+
+            return Ok(updates);
         }
     }
-
 }

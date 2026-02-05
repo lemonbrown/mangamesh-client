@@ -26,11 +26,11 @@ var builder = new HostBuilder().ConfigureServices(services =>
     .AddLogging(n => n.AddConsole())
     .AddScoped<ITrackerClient, TrackerClient>()
     .AddScoped<IPeerFetcher, PeerFetcher>()
-    .AddScoped<IManifestStore, ManifestStore>()
-    .AddSingleton<IBlobStore>(new BlobStore(root))
     .AddSingleton<IManifestStore>(new ManifestStore(root))
+    .AddSingleton<IStorageMonitorService>(sp => new StorageMonitorService(root, sp.GetRequiredService<IManifestStore>()))
+    .AddSingleton<IBlobStore>(sp => new BlobStore(root, sp.GetRequiredService<IStorageMonitorService>()))
     .AddScoped<IKeyStore, KeyStore>()
-    .AddSingleton<INodeIdentityService>(sp => new NodeIdentityService(sp.GetRequiredService<ILogger<NodeIdentityService>>()));
+    .AddSingleton<INodeIdentityService, NodeIdentityService>();
 
     services.AddHttpClient<IMetadataClient, HttpMetadataClient>(client =>
     {

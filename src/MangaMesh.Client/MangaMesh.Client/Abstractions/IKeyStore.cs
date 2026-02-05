@@ -10,6 +10,6 @@ namespace MangaMesh.Client.Abstractions
     public interface IKeyStore
     {
         Task SaveAsync(string publicKeyBase64, string privateKeyBase64);
-        public Task<PublicPrivateKeyPair> GetAsync();
+        public Task<PublicPrivateKeyPair?> GetAsync();
     }
 }

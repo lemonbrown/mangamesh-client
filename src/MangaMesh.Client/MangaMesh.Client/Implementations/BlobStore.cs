@@ -12,10 +12,12 @@ namespace MangaMesh.Client.Implementations
     public sealed class BlobStore : IBlobStore
     {
         private readonly string _root;
+        private readonly IStorageMonitorService _storageMonitor;
 
-        public BlobStore(string root)
+        public BlobStore(string root, IStorageMonitorService storageMonitor)
         {
             _root = root;
+            _storageMonitor = storageMonitor;
             Directory.CreateDirectory(_root);
         }
 
@@ -35,6 +37,8 @@ namespace MangaMesh.Client.Implementations
             if (File.Exists(path))
                 return blobHash;
 
+            await _storageMonitor.EnsureStorageAvailable(temp.Length);
+
             Directory.CreateDirectory(Path.GetDirectoryName(path)!);
 
             temp.Position = 0;
@@ -44,6 +48,8 @@ namespace MangaMesh.Client.Implementations
                 await temp.CopyToAsync(fs);
 
             File.Move(tmpPath, path, overwrite: false);
+
+            _storageMonitor.NotifyBlobWritten(temp.Length);
 
             return blobHash;
         }

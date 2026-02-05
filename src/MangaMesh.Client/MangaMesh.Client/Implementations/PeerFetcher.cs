@@ -45,12 +45,12 @@ namespace MangaMesh.Client.Implementations
             {
                 try
                 {
-                    var url = $"https://{peer.IP}:{peer.Port}/manifest/{manifestHash}";
+                    var url = $"https://{peer.IP}:{peer.Port}/api/manifest/{manifestHash}";
                     var response = await _httpClient.GetAsync(url);
                     if (!response.IsSuccessStatusCode) continue;
 
                     var json = await response.Content.ReadAsStringAsync();
-                    manifest = JsonSerializer.Deserialize<ChapterManifest>(json);
+                    manifest = JsonSerializer.Deserialize<ChapterManifest>(json, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
 
                     if (manifest != null) break;
                 }
@@ -76,7 +76,7 @@ namespace MangaMesh.Client.Implementations
                 {
                     try
                     {
-                        var url = $"https://{peer.IP}:{peer.Port}/blob/{blobHash.Value}";
+                        var url = $"https://{peer.IP}:{peer.Port}/api/blob/{blobHash.Value}";
                         var response = await _httpClient.GetAsync(url);
                         if (!response.IsSuccessStatusCode) continue;
 
@@ -99,8 +99,9 @@ namespace MangaMesh.Client.Implementations
             }
 
             // 4️⃣ Store manifest locally
-            var storedManifestHash = await _manifestStore.PutAsync(manifest);
-            return storedManifestHash;
+            await _manifestStore.SaveAsync(new ManifestHash(manifestHash), manifest);
+
+            return new ManifestHash(manifestHash);
         }
     }
 }

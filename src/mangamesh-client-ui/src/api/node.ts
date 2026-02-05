@@ -9,3 +9,11 @@ export async function getNodeStatus(): Promise<NodeStatus> {
     }
     return await response.json();
 }
+
+export async function getStorageStats(): Promise<import('../types/api').StorageStats> {
+    const response = await fetch(`${API_BASE_URL}/api/node/storage`);
+    if (!response.ok) {
+        throw new Error('Failed to fetch storage stats');
+    }
+    return await response.json();
+}

@@ -37,6 +37,11 @@ namespace MangaMesh.Client.Services
         {
             _logger.LogInformation("ReplicationService started");
 
+
+            // Initial Identity Verification (Startup) - Removed as we don't use Auth Sessions anymore
+            // await _nodeIdentity.VerifyIdentityAsync();
+
+
             while (!stoppingToken.IsCancellationRequested)
             {
                 try

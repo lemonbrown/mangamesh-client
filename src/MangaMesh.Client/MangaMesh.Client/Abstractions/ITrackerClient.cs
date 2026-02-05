@@ -25,10 +25,14 @@ namespace MangaMesh.Client.Abstractions
          AnnounceManifestRequest announcement,
          CancellationToken ct = default);
 
-        Task<string> RegisterSeriesAsync(MangaMesh.Shared.Models.ExternalMetadataSource source, string externalMangaId);
+        Task<(string SeriesId, string Title)> RegisterSeriesAsync(MangaMesh.Shared.Models.ExternalMetadataSource source, string externalMangaId);
 
-        Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null);
+        Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null, string[]? ids = null);
         Task<TrackerStats> GetStatsAsync();
+
+        Task<KeyChallengeResponse> CreateChallengeAsync(string publicKeyBase64);
+        Task<KeyVerificationResponse> VerifyChallengeAsync(string publicKeyBase64, string challengeId, string signatureBase64);
+        Task AuthorizeManifestAsync(AuthorizeManifestRequest request);
     }
 
     public class TrackerStats

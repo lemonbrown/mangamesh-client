@@ -18,5 +18,6 @@ namespace MangaMesh.Client.Abstractions
         Task<(string SetHash, int Count)> GetSetHashAsync();
         Task<bool> ExistsAsync(ManifestHash manifestHash);
         Task<IEnumerable<ManifestHash>> GetAllHashesAsync();
+        Task DeleteAsync(ManifestHash hash);
     }
 }

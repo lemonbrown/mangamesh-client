@@ -17,9 +17,9 @@ export const mockStorageStats: StorageStats = {
 
 // Mutable mock data
 let mockSubscriptions: Subscription[] = [
-    { seriesId: "one-piece", autoFetchScanlators: ["tcb-scans"] },
-    { seriesId: "jujutsu-kaisen", autoFetchScanlators: [] },
-    { seriesId: "chainsaw-man", autoFetchScanlators: ["viz"] }
+    { seriesId: "one-piece", autoFetchScanlators: ["tcb-scans"], language: "en", autoFetch: true },
+    { seriesId: "jujutsu-kaisen", autoFetchScanlators: [], language: "en", autoFetch: false },
+    { seriesId: "chainsaw-man", autoFetchScanlators: ["viz"], language: "en", autoFetch: true }
 ];
 
 export const mockApi = {
@@ -183,13 +183,13 @@ export const mockApi = {
                 const q = query.toLowerCase();
                 // Mock database of series
                 const allSeries: SeriesSearchResult[] = [
-                    { seriesId: "one-piece", title: "One Piece", seedCount: 1542, chapterCount: 1110, lastUploadedAt: new Date().toISOString() },
-                    { seriesId: "jujutsu-kaisen", title: "Jujutsu Kaisen", seedCount: 890, chapterCount: 250, lastUploadedAt: new Date(Date.now() - 86400000).toISOString() },
-                    { seriesId: "chainsaw-man", title: "Chainsaw Man", seedCount: 1200, chapterCount: 160, lastUploadedAt: new Date(Date.now() - 3600000).toISOString() },
-                    { seriesId: "sakamoto-days", title: "Sakamoto Days", seedCount: 450, chapterCount: 160, lastUploadedAt: new Date(Date.now() - 7200000).toISOString() },
-                    { seriesId: "dandadan", title: "Dandadan", seedCount: 300, chapterCount: 140, lastUploadedAt: new Date(Date.now() - 172800000).toISOString() },
-                    { seriesId: "spy-x-family", title: "Spy x Family", seedCount: 800, chapterCount: 95, lastUploadedAt: new Date(Date.now() - 604800000).toISOString() },
-                    { seriesId: "berserk", title: "Berserk", seedCount: 2000, chapterCount: 375, lastUploadedAt: new Date(Date.now() - 2592000000).toISOString() },
+                    { seriesId: "one-piece", title: "One Piece", seedCount: 1542, chapterCount: 1110, lastUploadedAt: new Date().toISOString(), source: 0, externalMangaId: "mock-op", latestChapterNumber: 1110, latestChapterTitle: "The Star" },
+                    { seriesId: "jujutsu-kaisen", title: "Jujutsu Kaisen", seedCount: 890, chapterCount: 250, lastUploadedAt: new Date(Date.now() - 86400000).toISOString(), source: 0, externalMangaId: "mock-jjk", latestChapterNumber: 250, latestChapterTitle: "Inhuman Makyo Shinjuku Showdown, Part 22" },
+                    { seriesId: "chainsaw-man", title: "Chainsaw Man", seedCount: 1200, chapterCount: 160, lastUploadedAt: new Date(Date.now() - 3600000).toISOString(), source: 0, externalMangaId: "mock-csm", latestChapterNumber: 160, latestChapterTitle: "That's a Chainsaw" },
+                    { seriesId: "sakamoto-days", title: "Sakamoto Days", seedCount: 450, chapterCount: 160, lastUploadedAt: new Date(Date.now() - 7200000).toISOString(), source: 0, externalMangaId: "mock-sd", latestChapterNumber: 160, latestChapterTitle: "Hard Boiled" },
+                    { seriesId: "dandadan", title: "Dandadan", seedCount: 300, chapterCount: 140, lastUploadedAt: new Date(Date.now() - 172800000).toISOString(), source: 0, externalMangaId: "mock-dd", latestChapterNumber: 140, latestChapterTitle: "Aliens vs Yokai" },
+                    { seriesId: "spy-x-family", title: "Spy x Family", seedCount: 800, chapterCount: 95, lastUploadedAt: new Date(Date.now() - 604800000).toISOString(), source: 0, externalMangaId: "mock-spy", latestChapterNumber: 95, latestChapterTitle: "Mission 95" },
+                    { seriesId: "berserk", title: "Berserk", seedCount: 2000, chapterCount: 375, lastUploadedAt: new Date(Date.now() - 2592000000).toISOString(), source: 0, externalMangaId: "mock-berserk", latestChapterNumber: 375, latestChapterTitle: "Eclipse" },
                 ];
 
                 const results = allSeries.filter(s =>

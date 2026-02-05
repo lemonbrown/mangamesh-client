@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getSubscriptions, addSubscription, removeSubscription } from '../api/subscriptions';
+import { getSubscriptions, removeSubscription } from '../api/subscriptions';
 import type { Subscription } from '../types/api';
-import SeriesSearch from '../components/SeriesSearch';
+
 
 export default function Subscriptions() {
     const [subscriptions, setSubscriptions] = useState<Subscription[]>([]);
@@ -26,19 +26,12 @@ export default function Subscriptions() {
         load();
     }, []);
 
-    async function handleSearchSelect(seriesId: string) {
-        try {
-            await addSubscription({ seriesId, autoFetchScanlators: [] });
-            load();
-        } catch (e) {
-            alert('Failed to add subscription');
-        }
-    }
+
 
     async function handleRemove(sub: Subscription) {
         if (!confirm(`Unsubscribe from ${sub.seriesId}?`)) return;
         try {
-            await removeSubscription(sub);
+            await removeSubscription(sub.seriesId);
             load();
         } catch (e) {
             alert('Failed to remove subscription');
@@ -47,16 +40,7 @@ export default function Subscriptions() {
 
     return (
         <div className="space-y-8">
-            <div>
-                <h1 className="text-2xl font-bold text-gray-900 mb-4">Manage Subscriptions</h1>
 
-                <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <h2 className="text-lg font-medium text-gray-900 mb-4">Add New Series Subscription</h2>
-                    <div className="flex gap-4 items-end">
-                        <SeriesSearch onSelect={handleSearchSelect} />
-                    </div>
-                </div>
-            </div>
 
             <div>
                 <h2 className="text-lg font-medium text-gray-900 mb-4">Active Subscriptions</h2>

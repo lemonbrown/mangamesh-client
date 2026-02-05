@@ -91,6 +91,7 @@ namespace MangaMesh.Client.Implementations
                 ManifestHash = announcement.ManifestHash.Value,
                 SeriesId = announcement.SeriesId,
                 ChapterId = announcement.ChapterId,
+                ChapterNumber = announcement.ChapterNumber,
                 Chapter = announcement.Chapter,
                 Volume = announcement.Volume,
                 Source = announcement.Source,
@@ -102,7 +103,9 @@ namespace MangaMesh.Client.Implementations
                 CreatedUtc = announcement.CreatedUtc,
                 AnnouncedAt = announcement.AnnouncedAt,
                 Signature = announcement.Signature,
-                PublicKey = announcement.PublicKey
+                PublicKey = announcement.PublicKey,
+                SignedBy = announcement.SignedBy,
+                Files = announcement.Files
             };
 
             var httpContent = JsonContent.Create(content);
@@ -115,6 +118,11 @@ namespace MangaMesh.Client.Implementations
             if (response.StatusCode == System.Net.HttpStatusCode.Conflict)
             {
                 throw new InvalidOperationException("Manifest already exists on the tracker.");
+            }
+
+            if (response.StatusCode == System.Net.HttpStatusCode.Unauthorized)
+            {
+                throw new MangaMesh.Client.Exceptions.TrackerAuthenticationException("Tracker session expired or invalid.");
             }
 
             var error = await response.Content.ReadAsStringAsync(ct);
@@ -136,7 +144,7 @@ namespace MangaMesh.Client.Implementations
             }
         }
 
-        public async Task<string> RegisterSeriesAsync(MangaMesh.Shared.Models.ExternalMetadataSource source, string externalMangaId)
+        public async Task<(string SeriesId, string Title)> RegisterSeriesAsync(MangaMesh.Shared.Models.ExternalMetadataSource source, string externalMangaId)
         {
             var request = new
             {
@@ -148,7 +156,9 @@ namespace MangaMesh.Client.Implementations
             response.EnsureSuccessStatusCode();
 
             var result = await response.Content.ReadFromJsonAsync<RegisterSeriesResponse>();
-            return result?.SeriesId ?? throw new InvalidOperationException("Failed to register series: Empty response");
+            if (result == null) throw new InvalidOperationException("Failed to register series: Empty response");
+
+            return (result.SeriesId, result.Title);
         }
 
         private class RegisterSeriesResponse
@@ -156,12 +166,19 @@ namespace MangaMesh.Client.Implementations
             public string SeriesId { get; set; } = "";
             public string Title { get; set; } = "";
         }
-        public async Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null)
+        public async Task<IEnumerable<SeriesSummaryResponse>> SearchSeriesAsync(string query, string? sort = null, string[]? ids = null)
         {
             var url = $"/api/series?q={Uri.EscapeDataString(query ?? "")}";
             if (!string.IsNullOrEmpty(sort))
             {
                 url += $"&sort={Uri.EscapeDataString(sort)}";
+            }
+            if (ids != null && ids.Any())
+            {
+                foreach (var id in ids)
+                {
+                    url += $"&ids={Uri.EscapeDataString(id)}";
+                }
             }
             var response = await _httpClient.GetAsync(url);
             response.EnsureSuccessStatusCode();
@@ -175,13 +192,44 @@ namespace MangaMesh.Client.Implementations
             {
                 var response = await _httpClient.GetAsync("/stats");
                 if (!response.IsSuccessStatusCode) return new TrackerStats();
-                
+
                 return await response.Content.ReadFromJsonAsync<TrackerStats>() ?? new TrackerStats();
             }
             catch
             {
                 return new TrackerStats();
             }
+        }
+        public async Task<KeyChallengeResponse> CreateChallengeAsync(string publicKeyBase64)
+        {
+            var encodedKey = Uri.EscapeDataString(publicKeyBase64);
+            var response = await _httpClient.PostAsync($"/api/keys/{encodedKey}/challenges", null);
+            response.EnsureSuccessStatusCode();
+
+            return await response.Content.ReadFromJsonAsync<KeyChallengeResponse>()
+                ?? throw new InvalidOperationException("Failed to create challenge: Empty response");
+        }
+
+        public async Task<KeyVerificationResponse> VerifyChallengeAsync(string publicKeyBase64, string challengeId, string signatureBase64)
+        {
+            var encodedKey = Uri.EscapeDataString(publicKeyBase64);
+            var request = new KeyVerificationRequest
+            {
+                ChallengeId = challengeId,
+                SignatureBase64 = signatureBase64
+            };
+
+            var response = await _httpClient.PostAsJsonAsync($"/api/keys/{encodedKey}/challenges/{challengeId}/verify", request);
+            response.EnsureSuccessStatusCode();
+
+            return await response.Content.ReadFromJsonAsync<KeyVerificationResponse>()
+                ?? throw new InvalidOperationException("Failed to verify challenge: Empty response");
+        }
+
+        public async Task AuthorizeManifestAsync(AuthorizeManifestRequest request)
+        {
+            var response = await _httpClient.PostAsJsonAsync("/api/announce/authorize", request);
+            response.EnsureSuccessStatusCode();
         }
     }
 }

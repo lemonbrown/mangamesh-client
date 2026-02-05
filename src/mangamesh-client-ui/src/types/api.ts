@@ -7,10 +7,15 @@ export interface NodeStatus {
     storageUsedMb: number;
 }
 
-export interface Subscription {
+export interface SeriesSubscription {
     seriesId: string;
-    autoFetchScanlators: string[]; // List of scanlator IDs enabled for auto-fetch
+    language: string;
+    autoFetch: boolean;             // Matches backend
+    autoFetchScanlators: string[]; // Matches backend
+    subscribedAt?: string;
 }
+
+export type Subscription = SeriesSubscription; // Alias for backward compatibility
 
 export interface ImportChapterRequest {
     seriesId: string;
@@ -58,7 +63,12 @@ export interface SeriesSearchResult {
     lastUploadedAt?: string; // ISO Date
     source: number;
     externalMangaId: string;
+    year?: number;
+    latestChapterNumber?: number;
+    latestChapterTitle?: string;
 }
+
+export type SeriesSummaryResponse = SeriesSearchResult;
 
 export interface SeriesDetailsResponse {
     seriesId: string;
@@ -152,3 +162,36 @@ export interface AnalyzedChapterDto {
 }
 
 
+export interface ManifestFile {
+    hash: string;
+    filename: string;
+    size: number;
+}
+
+export interface FullChapterManifest {
+    version: string;
+    seriesId: string;
+    chapterId: string;
+    chapterNumber: number; // or ensure type match
+    files: ManifestFile[];
+}
+
+export interface ImportChapterResult {
+    manifestHash: string;
+    fileCount: number;
+    alreadyExists: boolean;
+}
+
+
+export interface StoredManifest {
+    hash: string;
+    seriesId: string;
+    chapterNumber: string;
+    volume?: string;
+    language: string;
+    scanGroup: string;
+    title: string;
+    sizeBytes: number;
+    fileCount: number;
+    createdUtc: string;
+}

@@ -62,12 +62,23 @@ export default function Series() {
                 </div>
                 <div className="text-xs text-gray-500 font-mono mt-0.5">ID: {series.seriesId}</div>
                 <div className="text-sm text-gray-500 mt-1">
-                    Last updated: {series.lastUploadedAt ? new Date(series.lastUploadedAt).toLocaleDateString() : 'Never'}
+                    {series.latestChapterNumber && (
+                        <span className="text-gray-700 font-medium">
+                            Latest Chapter: Ch. {series.latestChapterNumber}
+                            {series.latestChapterTitle && ` - ${series.latestChapterTitle}`}
+                        </span>
+                    )}
                 </div>
             </div>
             <div className="text-right text-sm text-gray-500">
                 <div><span className="font-semibold text-green-600">{series.seedCount ?? 0}</span> seeds</div>
                 <div>{series.chapterCount ?? 0} chapters</div>
+                <div className="mt-1 text-xs text-gray-400" title={series.lastUploadedAt}>
+                    Updated: {series.lastUploadedAt ? new Date(series.lastUploadedAt).toLocaleString(undefined, {
+                        dateStyle: 'medium',
+                        timeStyle: 'short'
+                    }) : 'Never'}
+                </div>
             </div>
         </div>
     );

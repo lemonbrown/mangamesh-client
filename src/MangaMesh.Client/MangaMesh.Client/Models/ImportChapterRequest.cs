@@ -30,7 +30,7 @@ namespace MangaMesh.Client.Models
         /// <summary>
         /// Chapter number
         /// </summary>
-        public int ChapterNumber { get; init; }
+        public double ChapterNumber { get; init; }
 
         /// <summary>
         /// Path to the folder containing chapter image files

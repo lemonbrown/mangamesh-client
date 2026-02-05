@@ -14,6 +14,8 @@ namespace MangaMesh.Client.Models
 
         public bool AutoFetch { get; init; } = true;
 
+        public List<string> AutoFetchScanlators { get; set; } = new();
+
         public DateTime SubscribedAt { get; set; }
     }
 

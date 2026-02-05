@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from 'react';
-import { searchSeries } from '../api/subscriptions';
+import { searchSeries } from '../api/series';
 import type { SeriesSearchResult } from '../types/api';
 
 interface SeriesSearchProps {
@@ -94,7 +94,7 @@ export default function SeriesSearch({ onSelect }: SeriesSearchProps) {
                                 </div>
                             </div>
                             <div className="text-xs text-gray-400 mt-1">
-                                Last updated: {new Date(series.lastUploadedAt).toLocaleDateString()}
+                                Last updated: {new Date(series.lastUploadedAt || 0).toLocaleDateString()}
                             </div>
                         </div>
                     ))}

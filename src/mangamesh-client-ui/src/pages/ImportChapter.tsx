@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { importChapter, getImportedChapters, uploadChapters } from '../api/import';
 import { getKeys, requestChallenge, solveChallenge, verifySignature } from '../api/keys';
-import { searchSeries } from '../api/series';
+import { searchMetadata } from '../api/series'; // Changed import
 import type { ImportChapterRequest, KeyPair, AnalyzedChapterDto, SeriesSearchResult } from '../types/api';
 
 export default function ImportChapter() {
@@ -13,13 +13,28 @@ export default function ImportChapter() {
     const [showSeriesDropdown, setShowSeriesDropdown] = useState(false);
     const [isSearchingSeries, setIsSearchingSeries] = useState(false);
 
+    const isSelectionUpdate = useRef(false);
+
     useEffect(() => {
         const timer = setTimeout(async () => {
+            if (isSelectionUpdate.current) {
+                isSelectionUpdate.current = false;
+                return;
+            }
+
             if (menuTitle.length >= 3) {
                 setIsSearchingSeries(true);
                 try {
-                    const results = await searchSeries(menuTitle);
-                    setSeriesSearchResults(results);
+                    const results = await searchMetadata(menuTitle); // Use new API
+                    // Map metadata to SeriesSearchResult format
+                    const mappedResults: SeriesSearchResult[] = results.map(r => ({
+                        seriesId: '', // Metadata search results don't have a seriesId yet
+                        title: r.title,
+                        source: r.source,
+                        externalMangaId: r.externalMangaId,
+                        year: r.year
+                    }));
+                    setSeriesSearchResults(mappedResults);
                     setShowSeriesDropdown(true);
                 } catch (e) {
                     console.error(e);
@@ -117,29 +132,65 @@ export default function ImportChapter() {
             if (batchReviewMode) {
                 // Batch import
                 let importedCount = 0;
+                let ignoredCount = 0;
                 for (const item of uploadBatch) {
-                    await importChapter({
-                        ...form,
-                        chapterNumber: item.suggestedChapterNumber,
-                        sourcePath: item.sourcePath,
-                        displayName: form.displayName || `${form.externalMangaId} Ch. ${item.suggestedChapterNumber}`,
-                        releaseType: form.releaseType || 'manual'
-                    });
-                    importedCount++;
+                    try {
+                        const result = await importChapter({
+                            ...form,
+                            chapterNumber: item.suggestedChapterNumber,
+                            sourcePath: item.sourcePath,
+                            displayName: form.displayName || `${form.externalMangaId} Ch. ${item.suggestedChapterNumber}`,
+                            releaseType: form.releaseType || 'manual'
+                        });
+
+                        if (result.alreadyExists) {
+                            ignoredCount++;
+                        } else {
+                            importedCount++;
+                        }
+                    } catch (e: any) {
+                        const msg = e.message || '';
+                        if (msg.includes('Manifest already exists')) {
+                            ignoredCount++;
+                        } else {
+                            console.error(`Failed to import ${item.sourcePath}`, e);
+                        }
+                    }
                 }
-                setMessage({ type: 'success', text: `Successfully imported ${importedCount} chapters.` });
+
+                if (ignoredCount > 0) {
+                    setMessage({ type: 'success', text: `Completed: ${importedCount} imported, ${ignoredCount} skipped (duplicates).` });
+                } else {
+                    setMessage({ type: 'success', text: `Successfully imported ${importedCount} chapters.` });
+                }
+
                 setBatchReviewMode(false);
                 setUploadBatch([]);
             } else {
                 // Single legacy import
-                await importChapter({
-                    ...form,
-                    displayName: form.displayName || `${form.externalMangaId} Ch. ${form.chapterNumber}`,
-                    releaseType: form.releaseType || 'manual'
-                });
-                setMessage({ type: 'success', text: 'Chapter imported successfully' });
-                setForm(prev => ({ ...prev, chapterNumber: prev.chapterNumber + 1 }));
-                setChapterInputValue((form.chapterNumber + 1).toString());
+                try {
+                    const result = await importChapter({
+                        ...form,
+                        displayName: form.displayName || `${form.externalMangaId} Ch. ${form.chapterNumber}`,
+                        releaseType: form.releaseType || 'manual'
+                    });
+
+                    if (result.alreadyExists) {
+                        setMessage({ type: 'error', text: 'This chapter has already been imported (Manifest exists).' });
+                    } else {
+                        setMessage({ type: 'success', text: 'Chapter imported successfully' });
+                        setForm(prev => ({ ...prev, chapterNumber: prev.chapterNumber + 1 }));
+                        setChapterInputValue((form.chapterNumber + 1).toString());
+                    }
+                } catch (e: any) {
+                    const msg = e.message || '';
+                    if (msg.includes('Manifest already exists')) {
+                        setMessage({ type: 'error', text: 'This chapter has already been imported (Manifest exists).' });
+                    } else {
+                        throw e; // Re-throw to be caught by outer catch
+                    }
+                }
+                loadHistory();
             }
 
             loadHistory();
@@ -396,6 +447,7 @@ export default function ImportChapter() {
                                                         key={`${series.source}-${series.externalMangaId}`}
                                                         className="px-4 py-2 hover:bg-gray-100 cursor-pointer text-sm"
                                                         onClick={() => {
+                                                            isSelectionUpdate.current = true;
                                                             setForm({
                                                                 ...form,
                                                                 source: series.source,
@@ -406,9 +458,12 @@ export default function ImportChapter() {
                                                             setShowSeriesDropdown(false);
                                                         }}
                                                     >
-                                                        <div className="font-medium text-gray-900">{series.title}</div>
+                                                        <div className="font-medium text-gray-900">
+                                                            {series.title}
+                                                            {series.year && <span className="text-gray-500 font-normal ml-2">({series.year})</span>}
+                                                        </div>
                                                         <div className="text-xs text-gray-500">
-                                                            {series.source === 0 ? 'MangaDex' : series.source === 1 ? 'AniList' : 'MAL'} • {series.externalMangaId}
+                                                            Source: {series.source === 0 ? 'MangaDex' : series.source === 1 ? 'AniList' : 'MAL'}
                                                             {series.seriesId ? ' • Registered' : ' • New'}
                                                         </div>
                                                     </div>

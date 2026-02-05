@@ -24,12 +24,15 @@ namespace MangaMesh.Client.Services
         private readonly IKeyStore _keyStore;
         private readonly INodeIdentityService _nodeIdentity;
 
+        private readonly IKeyPairService _keyPairService;
+
         public ImportChapterService(
             IBlobStore blobStore,
             IManifestStore manifestStore,
             ITrackerClient trackerClient,
             IKeyStore keyStore,
-            INodeIdentityService nodeIdentity)
+            INodeIdentityService nodeIdentity,
+            IKeyPairService keyPairService)
         {
             _blobStore = blobStore;
 
@@ -40,7 +43,13 @@ namespace MangaMesh.Client.Services
             _keyStore = keyStore;
 
             _nodeIdentity = nodeIdentity;
+
+            _keyPairService = keyPairService;
         }
+
+        // ... (existing code)
+
+
 
         /// <summary>
         /// Imports a chapter from a folder, creates a manifest, stores it, and publishes metadata.
@@ -69,34 +78,62 @@ namespace MangaMesh.Client.Services
                 pageHashes.Add(blobHash);
             }
 
-            // Step 2.1: Register Series to get authoritative ID
-            var seriesId = await _trackerClient.RegisterSeriesAsync(request.Source, request.ExternalMangaId);
+            // Step 2.1: Register Series to get authoritative ID and Title
+            var (seriesId, seriesTitle) = await _trackerClient.RegisterSeriesAsync(request.Source, request.ExternalMangaId);
 
-            // Step 3: compute hash for the manifest
+
+            // Step 3: compute hash for the manifest and build file list
+            var entries = new List<Shared.Models.ChapterFileEntry>();
+            for (int i = 0; i < files.Length; i++)
+            {
+                var fileInfo = new FileInfo(files[i]);
+                entries.Add(new Shared.Models.ChapterFileEntry
+                {
+                    Hash = pageHashes[i].Value,
+                    Path = Path.GetFileName(files[i]), // Using Path property, storing filename
+                    Size = fileInfo.Length
+                });
+            }
 
             var totalSize = files.Sum(f => new FileInfo(f).Length);
 
-
             var keyPair = await _keyStore.GetAsync();
+
+            var title = request.DisplayName;
+            if (!string.IsNullOrEmpty(seriesTitle) && !title.Contains(seriesTitle, StringComparison.OrdinalIgnoreCase))
+            {
+                if (title.Contains(request.ExternalMangaId))
+                {
+                    title = title.Replace(request.ExternalMangaId, seriesTitle);
+                }
+                else
+                {
+                    title = $"{seriesTitle} {title}";
+                }
+            }
 
 
             Shared.Models.ChapterManifest chapterManifest = new()
             {
                 ChapterNumber = request.ChapterNumber,
                 CreatedUtc = new DateTime(DateTime.UtcNow.Ticks / TimeSpan.TicksPerMillisecond * TimeSpan.TicksPerMillisecond, DateTimeKind.Utc),
-                ChapterId = request.SeriesId + ":" + request.ChapterNumber.ToString(),
+                ChapterId = seriesId + ":" + request.ChapterNumber.ToString(),
                 Language = request.Language,
-                SeriesId = request.SeriesId,
+                SeriesId = seriesId,
                 ScanGroup = request.ScanlatorId,
-                Title = request.DisplayName,
+                Title = title,
                 TotalSize = totalSize,
                 PublicKey = keyPair.PublicKeyBase64,
-                SignedBy = "self"
+                SignedBy = "self",
+                Files = entries
             };
 
             var hash = ManifestHash.FromManifest(chapterManifest);
 
             var isManifestExisting = await _manifestStore.ExistsAsync(hash);
+
+            if (isManifestExisting)
+                throw new InvalidOperationException("Manifest already exists");
 
             if (!isManifestExisting)
             {
@@ -115,8 +152,7 @@ namespace MangaMesh.Client.Services
                 var signedManifest = ManifestSigningService.SignManifest(chapterManifest, key);
 
                 // Step 5.2 publish to trackers
-
-                await _trackerClient.AnnounceManifestAsync(new AnnounceManifestRequest
+                var announceRequest = new AnnounceManifestRequest
                 {
                     NodeId = _nodeIdentity.NodeId,
                     ManifestHash = hash,
@@ -136,8 +172,12 @@ namespace MangaMesh.Client.Services
                     TotalSize = chapterManifest.TotalSize,
                     CreatedUtc = chapterManifest.CreatedUtc,
                     Signature = signedManifest.Signature,
-                    PublicKey = signedManifest.PublisherPublicKey
-                });
+                    PublicKey = signedManifest.PublisherPublicKey,
+                    SignedBy = chapterManifest.SignedBy,
+                    Files = (List<Shared.Models.ChapterFileEntry>)chapterManifest.Files
+                };
+
+                await AnnounceWithRetryAsync(announceRequest);
 
                 // Step 6: update manifest with signature details before returning/saving if needed
                 // Ideally we should save the signed details back to the manifest store so we can re-announce later.
@@ -188,7 +228,7 @@ namespace MangaMesh.Client.Services
             if (string.IsNullOrEmpty(manifest.Signature) || string.IsNullOrEmpty(manifest.PublicKey))
                 throw new InvalidOperationException("Manifest does not contain signature data. Cannot re-announce.");
 
-            await _trackerClient.AnnounceManifestAsync(new AnnounceManifestRequest
+            await AnnounceWithRetryAsync(new AnnounceManifestRequest
             {
                 NodeId = nodeId,
                 ManifestHash = hash,
@@ -206,7 +246,8 @@ namespace MangaMesh.Client.Services
                 TotalSize = manifest.TotalSize,
                 CreatedUtc = manifest.CreatedUtc,
                 Signature = manifest.Signature,
-                PublicKey = manifest.PublicKey
+                PublicKey = manifest.PublicKey,
+                Files = (List<Shared.Models.ChapterFileEntry>)manifest.Files
             });
         }
 
@@ -217,5 +258,36 @@ namespace MangaMesh.Client.Services
         }
 
 
+
+        private async Task AnnounceWithRetryAsync(AnnounceManifestRequest request)
+        {
+            // 1. Get Identity Keys
+            var keys = await _keyStore.GetAsync();
+            if (keys == null)
+            {
+                throw new InvalidOperationException("Cannot announce manifest: No identity keys found.");
+            }
+
+            // 2. Request Challenge
+            var challenge = await _trackerClient.CreateChallengeAsync(keys.PublicKeyBase64);
+
+            // 3. Solve Challenge
+            var signature = _keyPairService.SolveChallenge(challenge.Nonce, keys.PrivateKeyBase64);
+
+            // 4. Authorize Manifest
+            var authRequest = new AuthorizeManifestRequest
+            {
+                ChallengeId = challenge.ChallengeId,
+                SignatureBase64 = signature,
+                ManifestHash = request.ManifestHash.Value,
+                NodeId = request.NodeId,
+                PublicKeyBase64 = keys.PublicKeyBase64
+            };
+
+            await _trackerClient.AuthorizeManifestAsync(authRequest);
+
+            // 5. Announce Manifest (Tracker will check authorization)
+            await _trackerClient.AnnounceManifestAsync(request);
+        }
     }
 }

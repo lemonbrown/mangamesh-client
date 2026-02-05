@@ -4,7 +4,7 @@
         string SeriesId,
         string ScanlatorId,
         string Language,
-        int ChapterNumber,
+        double ChapterNumber,
         string SourcePath,
         string DisplayName,
         string ReleaseType,

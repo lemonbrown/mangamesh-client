@@ -18,7 +18,7 @@ namespace MangaMesh.Server.Controllers
             _manifestStore = manifestStore;
         }
 
-        [HttpGet(Name = "GetManifestByHash")]
+        [HttpGet("{hash}", Name = "GetManifestByHash")]
         public async Task<IResult> GetByHashAsync(string hash)
         {
             var manifestHash = new ManifestHash(hash);

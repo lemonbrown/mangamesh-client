@@ -1,31 +1,36 @@
+
 import { useEffect, useState } from 'react';
 
-import type { NodeStatus, ChapterSummary } from '../types/api';
+import type { NodeStatus, SeriesSummaryResponse } from '../types/api';
 import StorageBar from '../components/StorageBar';
-import RecentChaptersList from '../components/RecentChaptersList';
+import SubscriptionUpdatesList from '../components/SubscriptionUpdatesList';
 import * as api from '../api/node';
-import * as storageApi from '../api/storage';
-import * as chaptersApi from '../api/chapters';
+import * as subscriptionsApi from '../api/subscriptions';
 
 export default function Dashboard() {
     const [status, setStatus] = useState<NodeStatus | null>(null);
     const [storageTotal, setStorageTotal] = useState<number>(0);
-    const [recentChapters, setRecentChapters] = useState<ChapterSummary[]>([]);
+    const [usedStorage, setUsedStorage] = useState<number>(0);
+    const [manifestCount, setManifestCount] = useState<number>(0);
+    const [subscriptionUpdates, setSubscriptionUpdates] = useState<SeriesSummaryResponse[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         async function loadData() {
             try {
-                const [nodeStatus, storageStats, recent] = await Promise.all([
+                const [nodeStatus, storageStats, updates] = await Promise.all([
                     api.getNodeStatus(),
-                    storageApi.getStorageStats(),
-                    chaptersApi.getRecentChapters(5)
+                    api.getStorageStats(),
+                    subscriptionsApi.getSubscriptionUpdates()
                 ]);
                 setStatus(nodeStatus);
                 setStorageTotal(storageStats.totalMb);
-                setRecentChapters(recent);
+                setUsedStorage(storageStats.usedMb);
+                setManifestCount(storageStats.manifestCount);
+                setSubscriptionUpdates(updates);
             } catch (err) {
+                console.error(err);
                 setError('Failed to load dashboard data');
             } finally {
                 setLoading(false);
@@ -56,16 +61,16 @@ export default function Dashboard() {
 
                     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
                         <div className="text-sm font-medium text-gray-500">Seeded Manifests</div>
-                        <div className="mt-2 text-3xl font-semibold text-gray-900">{status.seededManifests}</div>
+                        <div className="mt-2 text-3xl font-semibold text-gray-900">{manifestCount}</div>
                     </div>
                 </div>
 
                 <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                    <StorageBar usedMb={status.storageUsedMb} totalMb={storageTotal} />
+                    <StorageBar usedMb={usedStorage} totalMb={storageTotal} />
                 </div>
             </div>
 
-            <RecentChaptersList chapters={recentChapters} />
+            <SubscriptionUpdatesList updates={subscriptionUpdates} loading={loading} />
         </div>
     );
 }

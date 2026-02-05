@@ -51,7 +51,7 @@ namespace MangaMesh.Client.Models
             sb.Append('|');
 
             // Step 2: sort file paths to guarantee deterministic hash
-            foreach (var filePath in manifest.Files.OrderBy(f => f))
+            foreach (var filePath in manifest.Files.OrderBy(f => f.Path))
             {
                 sb.Append(filePath);
                 sb.Append('|');
