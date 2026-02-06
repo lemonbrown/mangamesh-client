@@ -1,4 +1,4 @@
-﻿using MangaMesh.Client.Implementations;
+﻿using MangaMesh.Client.Manifests;
 using MangaMesh.Server.Models;
 
 namespace MangaMesh.Server.Services

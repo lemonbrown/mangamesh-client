@@ -1,6 +1,4 @@
-﻿using MangaMesh.Client.Abstractions;
-using MangaMesh.Client.Implementations;
-using MangaMesh.Client.Models;
+﻿using MangaMesh.Client.Manifests;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 

@@ -1,4 +1,4 @@
-﻿using MangaMesh.Client.Models;
+﻿using MangaMesh.Client.Manifests;
 using MangaMesh.Server.Models;
 using MangaMesh.Server.Services;
 using Microsoft.AspNetCore.Mvc;

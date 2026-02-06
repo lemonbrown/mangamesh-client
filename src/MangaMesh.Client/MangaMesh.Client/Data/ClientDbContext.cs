@@ -1,4 +1,5 @@
-using MangaMesh.Client.Entities;
+using MangaMesh.Client.Keys;
+using MangaMesh.Client.Manifests;
 using Microsoft.EntityFrameworkCore;
 
 namespace MangaMesh.Client.Data

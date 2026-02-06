@@ -1,5 +1,5 @@
-﻿using MangaMesh.Client.Models;
-using MangaMesh.Client.Services;
+﻿using MangaMesh.Client.Chapters;
+using MangaMesh.Client.Manifests;
 using MangaMesh.Server.Models;
 
 namespace MangaMesh.Server.Services
@@ -41,7 +41,7 @@ namespace MangaMesh.Server.Services
             );
         }
 
-        public async Task ReannounceAsync(MangaMesh.Client.Models.ManifestHash hash, string nodeId)
+        public async Task ReannounceAsync(ManifestHash hash, string nodeId)
         {
             await _importService.ReannounceAsync(hash, nodeId);
         }

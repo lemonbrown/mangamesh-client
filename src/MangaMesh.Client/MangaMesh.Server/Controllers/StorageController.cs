@@ -1,5 +1,5 @@
-﻿using MangaMesh.Client.Abstractions;
-using MangaMesh.Client.Models;
+﻿using MangaMesh.Client.Manifests;
+using MangaMesh.Client.Storage;
 using MangaMesh.Server.Models;
 using Microsoft.AspNetCore.Mvc;
 using System.Threading.Tasks;

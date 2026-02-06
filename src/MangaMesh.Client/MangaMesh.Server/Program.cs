@@ -1,7 +1,13 @@
-using MangaMesh.Client.Abstractions;
-using MangaMesh.Client.Implementations;
-using MangaMesh.Client.Services;
-using MangaMesh.Client.Services;
+using MangaMesh.Client.Blob;
+using MangaMesh.Client.Chapters;
+using MangaMesh.Client.Keys;
+using MangaMesh.Client.Manifests;
+using MangaMesh.Client.Metadata;
+using MangaMesh.Client.Node;
+using MangaMesh.Client.Replication;
+using MangaMesh.Client.Storage;
+using MangaMesh.Client.Subscriptions;
+using MangaMesh.Client.Tracker;
 using MangaMesh.Server.Services;
 using Microsoft.EntityFrameworkCore;
 
@@ -135,10 +141,10 @@ using (var scope = app.Services.CreateScope())
             try
             {
                 var json = File.ReadAllText(jsonKeyPath);
-                var keyPair = System.Text.Json.JsonSerializer.Deserialize<MangaMesh.Client.Models.PublicPrivateKeyPair>(json);
+                var keyPair = System.Text.Json.JsonSerializer.Deserialize<PublicPrivateKeyPair>(json);
                 if (keyPair != null)
                 {
-                    db.Keys.Add(new MangaMesh.Client.Entities.KeyEntity
+                    db.Keys.Add(new KeyEntity
                     {
                         PublicKey = keyPair.PublicKeyBase64,
                         PrivateKey = keyPair.PrivateKeyBase64,
@@ -172,7 +178,7 @@ using (var scope = app.Services.CreateScope())
 
                     if (manifest != null)
                     {
-                        db.Manifests.Add(new MangaMesh.Client.Entities.ManifestEntity
+                        db.Manifests.Add(new ManifestEntity
                         {
                             Hash = hash,
                             SeriesId = manifest.SeriesId,

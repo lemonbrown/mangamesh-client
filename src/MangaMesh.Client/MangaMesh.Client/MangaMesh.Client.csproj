@@ -16,10 +16,17 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.2" />
     <PackageReference Include="NSec.Cryptography" Version="25.4.0" />
     <PackageReference Include="Chaos.NaCl.Standard" Version="1.0.0" />
+    <PackageReference Include="YamlDotNet" Version="16.3.0" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\..\mangamesh-shared\src\MangaMesh.Shared\MangaMesh.Shared\MangaMesh.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Update="config\bootstrap_nodes.yml">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
 
 </Project>

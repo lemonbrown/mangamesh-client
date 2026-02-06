@@ -1,5 +1,4 @@
-using MangaMesh.Client.Abstractions;
-using MangaMesh.Client.Models;
+using MangaMesh.Client.Blob;
 using Microsoft.AspNetCore.Mvc;
 
 namespace MangaMesh.Server.Controllers

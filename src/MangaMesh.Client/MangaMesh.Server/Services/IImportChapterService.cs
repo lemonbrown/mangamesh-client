@@ -1,4 +1,5 @@
-﻿using MangaMesh.Server.Models;
+﻿using MangaMesh.Client.Manifests;
+using MangaMesh.Server.Models;
 
 namespace MangaMesh.Server.Services
 {
@@ -16,7 +17,7 @@ namespace MangaMesh.Server.Services
             CancellationToken ct = default
         );
 
-        Task ReannounceAsync(MangaMesh.Client.Models.ManifestHash hash, string nodeId);
+        Task ReannounceAsync(ManifestHash hash, string nodeId);
     }
 
 }
