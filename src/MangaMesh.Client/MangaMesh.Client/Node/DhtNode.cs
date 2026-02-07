@@ -48,9 +48,9 @@ namespace MangaMesh.Client.Node
         /// <summary>
         /// Start the DHT node and maintenance loops.
         /// </summary>
-        public void StartWithMaintenance()
+        public void StartWithMaintenance(bool enableBootstrap = true)
         {
-            Start();
+            Start(enableBootstrap);
             _maintenanceToken = new CancellationTokenSource();
             Task.Run(() => MaintenanceLoopAsync(_maintenanceToken.Token));
         }
@@ -114,15 +114,15 @@ namespace MangaMesh.Client.Node
                 // ---------------------------
                 // Bucket refresh (optional)
                 // ---------------------------
-                foreach (var bucket in RoutingTable)
-                {
-                    // if bucket empty, optionally query random IDs in range
-                    if (bucket.Entries.Count == 0)
-                    {
-                        var randomId = Crypto.RandomNodeId();
-                        _ = FindNodeAsync(randomId);
-                    }
-                }
+                //foreach (var bucket in RoutingTable)
+                //{
+                //    // if bucket empty, optionally query random IDs in range
+                //    if (bucket.Entries.Count == 0)
+                //    {
+                //        var randomId = Crypto.RandomNodeId();
+                //        _ = FindNodeAsync(randomId);
+                //    }
+                //}
 
                 await Task.Delay(TimeSpan.FromSeconds(10), token);
             }
@@ -131,7 +131,7 @@ namespace MangaMesh.Client.Node
         /// <summary>
         /// Start listening to incoming messages from the transport.
         /// </summary>
-        public void Start()
+        public void Start(bool enableBootstrap = true)
         {
             if (_running) return;
 
@@ -179,7 +179,10 @@ namespace MangaMesh.Client.Node
 
             Task.Run(MessageLoopAsync);
 
-            //Task.Run(async () => await BootstrapAsync(bootstrapNodes));
+            if (enableBootstrap)
+            {
+                Task.Run(async () => await BootstrapAsync(bootstrapNodes));
+            }
         }
 
         public async Task StoreAsync(byte[] contentHash)
@@ -194,7 +197,8 @@ namespace MangaMesh.Client.Node
                     SenderNodeId = Identity.NodeId,
                     Payload = contentHash,
                     TimestampUtc = DateTime.UtcNow,
-                    Signature = Identity.Sign(contentHash)
+                    Signature = Identity.Sign(contentHash),
+                    SenderPort = Transport.Port
                 };
                 await Transport.SendAsync(node.Address, message);
             }
@@ -216,7 +220,8 @@ namespace MangaMesh.Client.Node
                     SenderNodeId = Identity.NodeId,
                     Payload = contentHash,
                     TimestampUtc = DateTime.UtcNow,
-                    Signature = Identity.Sign(contentHash)
+                    Signature = Identity.Sign(contentHash),
+                    SenderPort = Transport.Port
                 };
                 await Transport.SendAsync(node.Address, message);
                 // response handling omitted for skeleton
@@ -245,15 +250,22 @@ namespace MangaMesh.Client.Node
 
             foreach (var node in closestNodes)
             {
+                Console.WriteLine($"Looking for node [{node.NodeId}] - [{node.Address.Host}:{node.Address.Port}]");
+             
                 var message = new DhtMessage
                 {
                     Type = DhtMessageType.FindNode,
                     SenderNodeId = Identity.NodeId,
                     Payload = nodeId,
                     TimestampUtc = DateTime.UtcNow,
-                    Signature = Identity.Sign(nodeId)
+                    Signature = Identity.Sign(nodeId),
+                    SenderPort = Transport.Port
                 };
+
                 await Transport.SendAsync(node.Address, message);
+                
+                Console.WriteLine($"Found node [{node.NodeId}] - [{node.Address.Host}:{node.Address.Port}]");
+
                 // response handling omitted
             }
             return closestNodes;
@@ -267,7 +279,8 @@ namespace MangaMesh.Client.Node
                 SenderNodeId = Identity.NodeId,
                 Payload = Array.Empty<byte>(),
                 TimestampUtc = DateTime.UtcNow,
-                Signature = Identity.Sign(Array.Empty<byte>())
+                Signature = Identity.Sign(Array.Empty<byte>()),
+                SenderPort = Transport.Port
             };
             await Transport.SendAsync(node.Address, message);
         }
@@ -293,7 +306,13 @@ namespace MangaMesh.Client.Node
                     var foundNodes = await FindNodeAsync(randomId, bootstrap);
                     foreach (var node in foundNodes)
                     {
-                        UpdateRoutingTable(node.NodeId, node.Address);
+                        if (node.NodeId != null)
+                            UpdateRoutingTable(node.NodeId, node.Address);
+                    }
+                    
+                    if (foundNodes.Count > 0)
+                    {
+                         break;
                     }
                 }
                 catch
@@ -312,7 +331,22 @@ namespace MangaMesh.Client.Node
                 if (message == null) continue;
 
                 // Update routing table with sender
-                UpdateRoutingTable(message.SenderNodeId, new NodeAddress("dummy", 0)); // Replace with actual sender transport info
+                // Update routing table with sender
+                // Use ComputedSenderIp (from TCP connection) and SenderPort (from message payload)
+                if (!string.IsNullOrEmpty(message.ComputedSenderIp) && message.SenderPort > 0)
+                {
+                     UpdateRoutingTable(message.SenderNodeId, new NodeAddress(message.ComputedSenderIp, message.SenderPort));
+                }
+                else
+                {
+                     // Fallback or log warning? For now, keep dummy if missing info, or just skip?
+                     // Keeping dummy might pollute routing table. Better to skip or log.
+                     // But for existing tests/logic, maybe fallback to dummy if local?
+                     // Let's assume we only update if we have info.
+                     Console.WriteLine($"Warning: Received message without valid address info. IP: {message.ComputedSenderIp}, Port: {message.SenderPort}");
+                }
+
+                Console.WriteLine($"Received message [{message.Type}]");
 
                 // Handle message asynchronously
                 _ = Task.Run(() => HandleMessageAsync(message));
@@ -361,7 +395,8 @@ namespace MangaMesh.Client.Node
                 SenderNodeId = Identity.NodeId,
                 Payload = Array.Empty<byte>(),
                 TimestampUtc = DateTime.UtcNow,
-                Signature = Identity.Sign(Array.Empty<byte>())
+                Signature = Identity.Sign(Array.Empty<byte>()),
+                SenderPort = Transport.Port
             };
 
             var senderAddress = GetAddressForNode(message.SenderNodeId);
@@ -389,7 +424,8 @@ namespace MangaMesh.Client.Node
                 SenderNodeId = Identity.NodeId,
                 Payload = nodesPayload,
                 TimestampUtc = DateTime.UtcNow,
-                Signature = Identity.Sign(nodesPayload)
+                Signature = Identity.Sign(nodesPayload),
+                SenderPort = Transport.Port
             };
 
             var senderAddress = GetAddressForNode(message.SenderNodeId);
@@ -411,7 +447,8 @@ namespace MangaMesh.Client.Node
                     SenderNodeId = Identity.NodeId,
                     Payload = SerializeNodeIds(nodesWithContent),
                     TimestampUtc = DateTime.UtcNow,
-                    Signature = Identity.Sign(SerializeNodeIds(nodesWithContent))
+                    Signature = Identity.Sign(SerializeNodeIds(nodesWithContent)),
+                    SenderPort = Transport.Port
                 };
             }
             else
@@ -424,7 +461,8 @@ namespace MangaMesh.Client.Node
                     SenderNodeId = Identity.NodeId,
                     Payload = SerializeNodes(closestNodes),
                     TimestampUtc = DateTime.UtcNow,
-                    Signature = Identity.Sign(SerializeNodes(closestNodes))
+                    Signature = Identity.Sign(SerializeNodes(closestNodes)),
+                    SenderPort = Transport.Port
                 };
             }
 
@@ -439,6 +477,9 @@ namespace MangaMesh.Client.Node
 
         private void UpdateRoutingTable(byte[] nodeId, NodeAddress address)
         {
+            if (nodeId == null || nodeId.Length == 0) return;
+
+            Console.WriteLine($"Adding node [{address.Host}:{address.Port}] to routing table");
             int bucketIndex = GetBucketIndex(nodeId);
             var entry = new RoutingEntry
             {

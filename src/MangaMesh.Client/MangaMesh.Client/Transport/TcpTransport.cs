@@ -26,6 +26,8 @@ namespace MangaMesh.Client.Transport
             Task.Run(AcceptLoopAsync);
         }
 
+        public int Port => _listenPort;
+
         private async Task AcceptLoopAsync()
         {
             while (true)
@@ -49,7 +51,11 @@ namespace MangaMesh.Client.Transport
                     var message = JsonSerializer.Deserialize<DhtMessage>(json);
                     if (message != null)
                     {
-                        Console.WriteLine($"[TCP] Received {message.Type} from {Convert.ToHexString(message.SenderNodeId)[..8]}...");
+                        if (client.Client.RemoteEndPoint is IPEndPoint remoteIp)
+                        {
+                            message.ComputedSenderIp = remoteIp.Address.ToString();
+                        }
+
                         lock (_incomingMessages)
                             _incomingMessages.Enqueue(message);
                     }
@@ -63,7 +69,6 @@ namespace MangaMesh.Client.Transport
         {
             try
             {
-                Console.WriteLine($"[TCP] Sending {message.Type} to {address.Host}:{address.Port}...");
                 using var client = new TcpClient();
                 await client.ConnectAsync(address.Host, address.Port);
                 using var stream = client.GetStream();

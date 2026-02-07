@@ -16,7 +16,7 @@ namespace MangaMesh.Client.Node
         Task<List<byte[]>> FindValueAsync(byte[] contentHash);
         Task<List<RoutingEntry>> FindNodeAsync(byte[] nodeId, RoutingEntry? bootstrapNode = null);
         Task PingAsync(RoutingEntry node);
-        void StartWithMaintenance();
+        void StartWithMaintenance(bool enableBootstrap = true);
         void StopWithMaintenance();
     }
 }

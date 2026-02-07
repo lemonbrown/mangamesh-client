@@ -10,6 +10,7 @@ namespace MangaMesh.Client.Transport
     {
         Task SendAsync(NodeAddress address, DhtMessage message);
         Task<DhtMessage> ReceiveAsync();
+        int Port { get; }
     }
 
 }

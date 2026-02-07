@@ -11,6 +11,7 @@ using MangaMesh.Client.Storage;
 using MangaMesh.Client.Tracker;
 using MangaMesh.Client.Transport;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -60,8 +61,9 @@ var builder = new HostBuilder().ConfigureServices(services =>
     // ======================================================
     services.AddSingleton<ITransport>(sp =>
     {
-        // Use TCP on port 3001
-        return new TcpTransport(listenPort: 3001);
+        var config = sp.GetRequiredService<IConfiguration>();
+        var port = config.GetValue<int>("Dht:Port", 3001);
+        return new TcpTransport(listenPort: port);
     });
 
     // ======================================================

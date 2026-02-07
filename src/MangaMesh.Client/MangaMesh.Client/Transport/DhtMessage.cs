@@ -16,6 +16,11 @@ namespace MangaMesh.Client.Transport
         public byte[] Payload { get; set; }
         public DateTime TimestampUtc { get; set; }
         public byte[] Signature { get; set; }
+        
+        public int SenderPort { get; set; }
+
+        [System.Text.Json.Serialization.JsonIgnore]
+        public string ComputedSenderIp { get; set; } = string.Empty;
 
         public bool Verify(INodeIdentity senderIdentity)
         {

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 
 namespace MangaMesh.Client.Node
 {
+    using Microsoft.Extensions.Configuration;
     using Microsoft.Extensions.Hosting;
     using System.Threading;
     using System.Threading.Tasks;
@@ -13,16 +14,19 @@ namespace MangaMesh.Client.Node
     public class DhtHostedService : IHostedService
     {
         private readonly IDhtNode _dhtNode;
+        private readonly IConfiguration _configuration;
 
-        public DhtHostedService(IDhtNode dhtNode)
+        public DhtHostedService(IDhtNode dhtNode, IConfiguration configuration)
         {
             _dhtNode = dhtNode;
+            _configuration = configuration;
         }
 
         public Task StartAsync(CancellationToken cancellationToken)
         {
+            var enableBootstrap = _configuration.GetValue<bool>("Dht:Bootstrap", true);
             // Start message loop + maintenance
-            _dhtNode.StartWithMaintenance();
+            _dhtNode.StartWithMaintenance(enableBootstrap);
             return Task.CompletedTask;
         }
 
