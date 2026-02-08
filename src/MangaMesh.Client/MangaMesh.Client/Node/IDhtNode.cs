@@ -1,4 +1,5 @@
-﻿using MangaMesh.Client.Transport;
+﻿using MangaMesh.Client.Content;
+using MangaMesh.Client.Transport;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,6 +15,11 @@ namespace MangaMesh.Client.Node
 
         Task StoreAsync(byte[] contentHash);
         Task<List<byte[]>> FindValueAsync(byte[] contentHash);
+        Task<List<DhtNode.ProviderInfo>> FindValueWithAddressAsync(byte[] contentHash);
+        Task<ContentMessage?> SendContentRequestAsync(NodeAddress address, ContentMessage message, TimeSpan timeout);
+
+        // Internal handler for responses
+        void HandleContentMessage(ContentMessage message);
         Task<List<RoutingEntry>> FindNodeAsync(byte[] nodeId, RoutingEntry? bootstrapNode = null);
         Task PingAsync(RoutingEntry node);
         void StartWithMaintenance(bool enableBootstrap = true);

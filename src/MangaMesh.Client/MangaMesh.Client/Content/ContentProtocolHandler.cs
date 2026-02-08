@@ -2,12 +2,16 @@ using MangaMesh.Client.Transport;
 using System;
 using System.Threading.Tasks;
 
+using MangaMesh.Client.Node;
+
 namespace MangaMesh.Client.Content
 {
     public class ContentProtocolHandler : IProtocolHandler
     {
         private readonly ITransport _transport;
         private readonly Func<string, byte[]?> _contentProvider;
+        
+        public IDhtNode? DhtNode { get; set; }
 
         public ContentProtocolHandler(ITransport transport, Func<string, byte[]?> contentProvider)
         {
@@ -65,6 +69,7 @@ namespace MangaMesh.Client.Content
         private Task HandleManifestDataAsync(NodeAddress from, ManifestData d)
         {
             Console.WriteLine($"[Content] Received ManifestData from {from.Host}:{from.Port} for hash {d.ContentHash}. Size: {d.Data.Length} bytes");
+            DhtNode?.HandleContentMessage(d);
             return Task.CompletedTask;
         }
     }

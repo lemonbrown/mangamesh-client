@@ -10,6 +10,7 @@ namespace MangaMesh.Client.Content
     public abstract class ContentMessage
     {
         public int SenderPort { get; set; }
+        public Guid RequestId { get; set; } = Guid.NewGuid();
 
         public static ContentMessage? Deserialize(ReadOnlyMemory<byte> payload)
         {

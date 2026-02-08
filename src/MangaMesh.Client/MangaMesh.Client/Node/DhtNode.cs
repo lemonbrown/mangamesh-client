@@ -10,12 +10,19 @@ using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
 using System.Text.Json;
+using MangaMesh.Client.Content;
 
 namespace MangaMesh.Client.Node
 {
 
     public class DhtNode : IDhtNode
     {
+        public struct ProviderInfo
+        {
+             public byte[] NodeId;
+             public NodeAddress Address;
+        }
+
         private readonly TimeSpan _refreshInterval = TimeSpan.FromMinutes(15);
         private readonly TimeSpan _reannounceInterval = TimeSpan.FromMinutes(30);
         private readonly TimeSpan _pingInterval = TimeSpan.FromMinutes(5);
@@ -50,6 +57,7 @@ namespace MangaMesh.Client.Node
         /// Start the DHT node and maintenance loops.
         /// </summary>
         private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, TaskCompletionSource<DhtMessage>> _pendingRequests = new();
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, TaskCompletionSource<ContentMessage>> _pendingContentRequests = new();
 
         /// <summary>
         /// Start the DHT node and maintenance loops.
@@ -241,6 +249,124 @@ namespace MangaMesh.Client.Node
             
             // Deduplicate
             return resultNodes.Distinct(new ByteArrayComparer()).ToList();
+        }
+
+        public async Task<ContentMessage?> SendContentRequestAsync(NodeAddress address, ContentMessage message, TimeSpan timeout)
+        {
+            message.SenderPort = Transport.Port;
+            
+            var tcs = new TaskCompletionSource<ContentMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+            _pendingContentRequests[message.RequestId] = tcs;
+
+            try
+            {
+                var json = JsonSerializer.Serialize<ContentMessage>(message);
+                var jsonBytes = Encoding.UTF8.GetBytes(json);
+                var payload = new byte[1 + jsonBytes.Length];
+                payload[0] = (byte)ProtocolKind.Content;
+                Array.Copy(jsonBytes, 0, payload, 1, jsonBytes.Length);
+                
+                await Transport.SendAsync(address, new ReadOnlyMemory<byte>(payload));
+
+                var timeoutTask = Task.Delay(timeout);
+                var completed = await Task.WhenAny(tcs.Task, timeoutTask);
+                
+                if (completed == tcs.Task)
+                {
+                    return await tcs.Task;
+                }
+                else
+                {
+                    _pendingContentRequests.TryRemove(message.RequestId, out _);
+                    return null;
+                }
+            }
+            catch
+            {
+                _pendingContentRequests.TryRemove(message.RequestId, out _);
+                return null;
+            }
+        }
+
+        // Internal method to feed content messages from handler
+        public void HandleContentMessage(ContentMessage message)
+        {
+            if (_pendingContentRequests.TryRemove(message.RequestId, out var tcs))
+            {
+                tcs.TrySetResult(message);
+            }
+        }
+
+        public async Task<List<ProviderInfo>> FindValueWithAddressAsync(byte[] contentHash)
+        {
+            var providers = new List<ProviderInfo>();
+            var closestNodes = FindClosestNodes(contentHash, 20);
+
+            foreach (var node in closestNodes)
+            {
+                var message = new DhtMessage
+                {
+                    Type = DhtMessageType.FindValue,
+                    SenderNodeId = Identity.NodeId,
+                    Payload = contentHash,
+                    TimestampUtc = DateTime.UtcNow,
+                    Signature = Identity.Sign(contentHash),
+                    SenderPort = Transport.Port
+                };
+                
+                var response = await SendDhtMessageAsync(node.Address, message, waitForResponse: true);
+                
+                if (response != null && response.Type == DhtMessageType.Value)
+                {
+                    var providerIds = JsonSerializer.Deserialize<List<byte[]>>(Encoding.UTF8.GetString(response.Payload));
+                    if (providerIds != null)
+                    {
+                        foreach (var pid in providerIds)
+                        {
+                            // In a real implementation, we would need to know the provider's address.
+                            // The 'Value' response in this simplified DHT only returns Node IDs.
+                            // We need to resolve these IDs to addresses.
+                            // 
+                            // Option 1: The response includes addresses (ideal).
+                            // Option 2: The provider IS the node we queried (common in some DHTs).
+                            // Option 3: We have to do a FindNode for the provider ID (slow).
+                            
+                            // For this implementation, we will assume the node responding with the Value 
+                            // *knows* the provider's address or IS the provider.
+                            // 
+                            // Current protocol limitation: 'Value' message only contains list of NodeIDs (byte[]).
+                            
+                            // HACK: For the purpose of the Gateway, we will try to find the address in our local routing table.
+                            // If not found, we might need to ask the node that gave us the value (if it sent its own ID as a provider).
+                            
+                            var address = GetAddressForNode(pid);
+                            if (address != null)
+                            {
+                                providers.Add(new ProviderInfo { NodeId = pid, Address = address });
+                            }
+                            else if (pid.SequenceEqual(response.SenderNodeId) && !string.IsNullOrEmpty(response.ComputedSenderIp))
+                            {
+                                // The responder is the provider
+                                providers.Add(new ProviderInfo { NodeId = pid, Address = new NodeAddress(response.ComputedSenderIp, response.SenderPort) });
+                            }
+                        }
+                    }
+                }
+            }
+            
+            // Local store check
+            var localProviders = Storage.GetNodesForContent(contentHash);
+            foreach(var pid in localProviders)
+            {
+                 if (pid.SequenceEqual(Identity.NodeId))
+                 {
+                      // We are the provider
+                      // providers.Add(...) - The gateway is local, so it can just fetch natively? 
+                      // actually DhtNode should probably expose a direct "GetLocalContent" for this.
+                 }
+            }
+
+            return providers;
         }
 
         public async Task<List<RoutingEntry>> FindNodeAsync(byte[] nodeId, RoutingEntry? bootstrap = null)
