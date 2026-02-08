@@ -92,6 +92,13 @@ namespace MangaMesh.Client.Dht.TestHarness
             var transport = new TcpTransport(port);
             
             var node = new DhtNode(identity, transport, storage, keyPairService, keyStore);
+
+            // Wiring for Protocol Multiplexing
+            var router = new ProtocolRouter();
+            var dhtHandler = new DhtProtocolHandler(node);
+            router.Register(dhtHandler);
+            transport.OnMessage += router.RouteAsync;
+
             node.StartWithMaintenance(enableBootstrap: false);
 
             _nodes[port] = node;

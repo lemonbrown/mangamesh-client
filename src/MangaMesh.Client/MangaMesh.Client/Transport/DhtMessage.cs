@@ -17,6 +17,8 @@ namespace MangaMesh.Client.Transport
         public DateTime TimestampUtc { get; set; }
         public byte[] Signature { get; set; }
         
+        public Guid RequestId { get; set; } = Guid.NewGuid();
+
         public int SenderPort { get; set; }
 
         [System.Text.Json.Serialization.JsonIgnore]
@@ -25,7 +27,7 @@ namespace MangaMesh.Client.Transport
         public bool Verify(INodeIdentity senderIdentity)
         {
             return senderIdentity.Verify(
-                Crypto.Hash(Type.ToString(), Payload, TimestampUtc),
+                Crypto.Hash(Type.ToString(), Payload, TimestampUtc, RequestId.ToByteArray()),
                 Signature
             );
         }

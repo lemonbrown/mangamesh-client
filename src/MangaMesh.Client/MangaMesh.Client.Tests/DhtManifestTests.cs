@@ -89,6 +89,12 @@ namespace MangaMesh.Client.Tests
             var transport = new TcpTransport(port);
             
             var node = new DhtNode(identity, transport, storage, keyPairService, keyStore);
+
+            var router = new ProtocolRouter();
+            var handler = new DhtProtocolHandler(node);
+            router.Register(handler);
+            transport.OnMessage += router.RouteAsync;
+
             node.StartWithMaintenance(enableBootstrap: false);
             return node;
         }

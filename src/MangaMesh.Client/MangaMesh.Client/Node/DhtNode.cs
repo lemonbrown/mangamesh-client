@@ -9,6 +9,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading.Tasks;
+using System.Text.Json;
 
 namespace MangaMesh.Client.Node
 {
@@ -44,6 +45,11 @@ namespace MangaMesh.Client.Node
                 RoutingTable.Add(new KBucket());
         }
 
+
+        /// <summary>
+        /// Start the DHT node and maintenance loops.
+        /// </summary>
+        private readonly System.Collections.Concurrent.ConcurrentDictionary<Guid, TaskCompletionSource<DhtMessage>> _pendingRequests = new();
 
         /// <summary>
         /// Start the DHT node and maintenance loops.
@@ -105,31 +111,17 @@ namespace MangaMesh.Client.Node
                         foreach (var node in staleNodes)
                         {
                             await PingAsync(node);
-                            // Optionally remove if no response after retries
                         }
                     }
                     lastPing = now;
                 }
-
-                // ---------------------------
-                // Bucket refresh (optional)
-                // ---------------------------
-                //foreach (var bucket in RoutingTable)
-                //{
-                //    // if bucket empty, optionally query random IDs in range
-                //    if (bucket.Entries.Count == 0)
-                //    {
-                //        var randomId = Crypto.RandomNodeId();
-                //        _ = FindNodeAsync(randomId);
-                //    }
-                //}
 
                 await Task.Delay(TimeSpan.FromSeconds(10), token);
             }
         }
 
         /// <summary>
-        /// Start listening to incoming messages from the transport.
+        /// Start the node.
         /// </summary>
         public void Start(bool enableBootstrap = true)
         {
@@ -177,7 +169,7 @@ namespace MangaMesh.Client.Node
 
             _running = true;
 
-            Task.Run(MessageLoopAsync);
+            // Message loop is removed as it is now handled by ProtocolRouter/Handler logic externally
 
             if (enableBootstrap)
             {
@@ -200,7 +192,7 @@ namespace MangaMesh.Client.Node
                     Signature = Identity.Sign(contentHash),
                     SenderPort = Transport.Port
                 };
-                await Transport.SendAsync(node.Address, message);
+                await SendDhtMessageAsync(node.Address, message);
             }
             // Also store locally
             Storage.StoreContent(contentHash, Identity.NodeId);
@@ -223,13 +215,32 @@ namespace MangaMesh.Client.Node
                     Signature = Identity.Sign(contentHash),
                     SenderPort = Transport.Port
                 };
-                await Transport.SendAsync(node.Address, message);
-                // response handling omitted for skeleton
+                
+                // Wait for response
+                var response = await SendDhtMessageAsync(node.Address, message, waitForResponse: true);
+                
+                if (response != null)
+                {
+                    if (response.Type == DhtMessageType.Value)
+                    {
+                        var providers = JsonSerializer.Deserialize<List<byte[]>>(Encoding.UTF8.GetString(response.Payload));
+                        if (providers != null)
+                        {
+                            resultNodes.AddRange(providers);
+                        }
+                    }
+                    else if (response.Type == DhtMessageType.Nodes)
+                    {
+                        // Could update closestNodes here for recursive lookup
+                    }
+                }
             }
 
             // Include local store if present
             resultNodes.AddRange(Storage.GetNodesForContent(contentHash));
-            return resultNodes;
+            
+            // Deduplicate
+            return resultNodes.Distinct(new ByteArrayComparer()).ToList();
         }
 
         public async Task<List<RoutingEntry>> FindNodeAsync(byte[] nodeId, RoutingEntry? bootstrap = null)
@@ -239,12 +250,10 @@ namespace MangaMesh.Client.Node
 
             if (bootstrap != null)
             {
-                // Start from bootstrap node
                 closestNodes.Add(bootstrap);
             }
             else
             {
-                // Use closest nodes from current routing table
                 closestNodes.AddRange(FindClosestNodes(nodeId, 20));
             }
 
@@ -262,11 +271,12 @@ namespace MangaMesh.Client.Node
                     SenderPort = Transport.Port
                 };
 
-                await Transport.SendAsync(node.Address, message);
+                var response = await SendDhtMessageAsync(node.Address, message, waitForResponse: true);
                 
-                Console.WriteLine($"Found node [{node.NodeId}] - [{node.Address.Host}:{node.Address.Port}]");
-
-                // response handling omitted
+                if (response != null && response.Type == DhtMessageType.Nodes)
+                {
+                    // Update routing table logic omitted for brevity, but this would parse nodes
+                }
             }
             return closestNodes;
         }
@@ -282,7 +292,7 @@ namespace MangaMesh.Client.Node
                 Signature = Identity.Sign(Array.Empty<byte>()),
                 SenderPort = Transport.Port
             };
-            await Transport.SendAsync(node.Address, message);
+            await SendDhtMessageAsync(node.Address, message);
         }
 
 
@@ -321,53 +331,40 @@ namespace MangaMesh.Client.Node
                 }
             }
         }
-
-
-        private async Task MessageLoopAsync()
+        
+        // Made public for ProtocolHandler
+        public async Task HandleMessageAsync(DhtMessage message)
         {
-            while (_running)
+            // Check if it's a response to a pending request
+            if (_pendingRequests.TryRemove(message.RequestId, out var tcs))
             {
-                var message = await Transport.ReceiveAsync();
-                if (message == null) continue;
-
-                // Update routing table with sender
-                // Update routing table with sender
-                // Use ComputedSenderIp (from TCP connection) and SenderPort (from message payload)
-                if (!string.IsNullOrEmpty(message.ComputedSenderIp) && message.SenderPort > 0)
-                {
-                     UpdateRoutingTable(message.SenderNodeId, new NodeAddress(message.ComputedSenderIp, message.SenderPort));
-                }
-                else
-                {
-                     // Fallback or log warning? For now, keep dummy if missing info, or just skip?
-                     // Keeping dummy might pollute routing table. Better to skip or log.
-                     // But for existing tests/logic, maybe fallback to dummy if local?
-                     // Let's assume we only update if we have info.
-                     Console.WriteLine($"Warning: Received message without valid address info. IP: {message.ComputedSenderIp}, Port: {message.SenderPort}");
-                }
-
-                Console.WriteLine($"Received message [{message.Type}]");
-
-                // Handle message asynchronously
-                _ = Task.Run(() => HandleMessageAsync(message));
+                tcs.TrySetResult(message);
+                return;
             }
-        }
 
-        private async Task HandleMessageAsync(DhtMessage message)
-        {
+            // Update routing table with sender
+            if (!string.IsNullOrEmpty(message.ComputedSenderIp) && message.SenderPort > 0)
+            {
+                 UpdateRoutingTable(message.SenderNodeId, new NodeAddress(message.ComputedSenderIp, message.SenderPort));
+            }
+            else
+            {
+                 Console.WriteLine($"Warning: Received message without valid address info. IP: {message.ComputedSenderIp}, Port: {message.SenderPort}");
+            }
+
+            Console.WriteLine($"Received message [{message.Type}]");
+
             switch (message.Type)
             {
                 case DhtMessageType.Ping:
                     await HandlePingAsync(message);
                     break;
                 case DhtMessageType.Pong:
-                    // optional: mark node as alive
                     break;
                 case DhtMessageType.FindNode:
                     await HandleFindNodeAsync(message);
                     break;
                 case DhtMessageType.Nodes:
-                    // optional: merge routing info
                     break;
                 case DhtMessageType.Store:
                     await HandleStoreAsync(message);
@@ -376,7 +373,6 @@ namespace MangaMesh.Client.Node
                     await HandleFindValueAsync(message);
                     break;
                 case DhtMessageType.Value:
-                    // optional: merge results
                     break;
                 default:
                     break;
@@ -396,12 +392,13 @@ namespace MangaMesh.Client.Node
                 Payload = Array.Empty<byte>(),
                 TimestampUtc = DateTime.UtcNow,
                 Signature = Identity.Sign(Array.Empty<byte>()),
-                SenderPort = Transport.Port
+                SenderPort = Transport.Port,
+                RequestId = message.RequestId // Echo ID
             };
 
             var senderAddress = GetAddressForNode(message.SenderNodeId);
             if (senderAddress != null)
-                await Transport.SendAsync(senderAddress, pong);
+                await SendDhtMessageAsync(senderAddress, pong);
         }
 
         private async Task HandleStoreAsync(DhtMessage message)
@@ -425,12 +422,13 @@ namespace MangaMesh.Client.Node
                 Payload = nodesPayload,
                 TimestampUtc = DateTime.UtcNow,
                 Signature = Identity.Sign(nodesPayload),
-                SenderPort = Transport.Port
+                SenderPort = Transport.Port,
+                RequestId = message.RequestId // Echo ID
             };
 
             var senderAddress = GetAddressForNode(message.SenderNodeId);
             if (senderAddress != null)
-                await Transport.SendAsync(senderAddress, nodesMessage);
+                await SendDhtMessageAsync(senderAddress, nodesMessage);
         }
 
         private async Task HandleFindValueAsync(DhtMessage message)
@@ -448,7 +446,8 @@ namespace MangaMesh.Client.Node
                     Payload = SerializeNodeIds(nodesWithContent),
                     TimestampUtc = DateTime.UtcNow,
                     Signature = Identity.Sign(SerializeNodeIds(nodesWithContent)),
-                    SenderPort = Transport.Port
+                    SenderPort = Transport.Port,
+                    RequestId = message.RequestId // Echo ID
                 };
             }
             else
@@ -462,13 +461,56 @@ namespace MangaMesh.Client.Node
                     Payload = SerializeNodes(closestNodes),
                     TimestampUtc = DateTime.UtcNow,
                     Signature = Identity.Sign(SerializeNodes(closestNodes)),
-                    SenderPort = Transport.Port
+                    SenderPort = Transport.Port,
+                    RequestId = message.RequestId // Echo ID
                 };
             }
 
             var senderAddress = GetAddressForNode(message.SenderNodeId);
             if (senderAddress != null)
-                await Transport.SendAsync(senderAddress, reply);
+                await SendDhtMessageAsync(senderAddress, reply);
+        }
+
+        private async Task<DhtMessage?> SendDhtMessageAsync(NodeAddress address, DhtMessage message, bool waitForResponse = false)
+        {
+            try
+            {
+                TaskCompletionSource<DhtMessage>? tcs = null;
+                if (waitForResponse)
+                {
+                    tcs = new TaskCompletionSource<DhtMessage>(TaskCreationOptions.RunContinuationsAsynchronously);
+                    _pendingRequests[message.RequestId] = tcs;
+                }
+
+                var json = JsonSerializer.Serialize(message);
+                var jsonBytes = Encoding.UTF8.GetBytes(json);
+                var payload = new byte[1 + jsonBytes.Length];
+                payload[0] = (byte)ProtocolKind.Dht;
+                Array.Copy(jsonBytes, 0, payload, 1, jsonBytes.Length);
+                await Transport.SendAsync(address, new ReadOnlyMemory<byte>(payload));
+
+                if (tcs != null)
+                {
+                    var timeoutTask = Task.Delay(2000); // 2s timeout
+                    var completed = await Task.WhenAny(tcs.Task, timeoutTask);
+                    if (completed == tcs.Task)
+                    {
+                        return await tcs.Task;
+                    }
+                    else
+                    {
+                        _pendingRequests.TryRemove(message.RequestId, out _);
+                        return null;
+                    }
+                }
+                return null;
+            }
+            catch (Exception ex)
+            {
+                 Console.WriteLine($"Failed to send message: {ex.Message}");
+                 _pendingRequests.TryRemove(message.RequestId, out _);
+                 return null;
+            }
         }
 
         // ======================================================
@@ -535,6 +577,86 @@ namespace MangaMesh.Client.Node
 
             return allEntries.GetRange(0, Math.Min(count, allEntries.Count));
         }
+
+        class ByteArrayComparer : IEqualityComparer<byte[]>
+        {
+            public bool Equals(byte[]? x, byte[]? y)
+            {
+                if (x == null || y == null) return x == y;
+                return x.SequenceEqual(y);
+            }
+
+            public int GetHashCode(byte[] obj)
+            {
+                return BitConverter.ToInt32(obj, 0); // simplified
+            }
+        }
+
+
+        // ======================================================
+        // Helpers
+        // ======================================================
+
+        //private void UpdateRoutingTable(byte[] nodeId, NodeAddress address)
+        //{
+        //    if (nodeId == null || nodeId.Length == 0) return;
+
+        //    Console.WriteLine($"Adding node [{address.Host}:{address.Port}] to routing table");
+        //    int bucketIndex = GetBucketIndex(nodeId);
+        //    var entry = new RoutingEntry
+        //    {
+        //        NodeId = nodeId,
+        //        Address = address,
+        //        LastSeenUtc = DateTime.UtcNow
+        //    };
+        //    RoutingTable[bucketIndex].AddOrUpdate(entry);
+        //}
+
+        //private int GetBucketIndex(byte[] nodeId)
+        //{
+        //    // XOR distance first differing bit
+        //    var distance = Crypto.XorDistance(Identity.NodeId, nodeId);
+        //    return (int)Math.Min(255, distance.BitLength() - 1);
+        //}
+
+        //private NodeAddress? GetAddressForNode(byte[] nodeId)
+        //{
+        //    foreach (var bucket in RoutingTable)
+        //    {
+        //        var entry = bucket.Entries.Find(e => e.NodeId.AsSpan().SequenceEqual(nodeId));
+        //        if (entry != null) return entry.Address;
+        //    }
+        //    return null;
+        //}
+
+        //private byte[] SerializeNodes(List<RoutingEntry> nodes)
+        //{
+        //    // naive JSON serialization
+        //    var addresses = nodes.ConvertAll(n => new { Host = n.Address.Host, Port = n.Address.Port });
+        //    return System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(addresses);
+        //}
+
+        //private byte[] SerializeNodeIds(List<byte[]> nodeIds)
+        //{
+        //    return System.Text.Json.JsonSerializer.SerializeToUtf8Bytes(nodeIds);
+        //}
+
+        //private List<RoutingEntry> FindClosestNodes(byte[] targetNodeId, int count)
+        //{
+        //    // naive linear scan; XOR distance
+        //    var allEntries = new List<RoutingEntry>();
+        //    foreach (var bucket in RoutingTable)
+        //        allEntries.AddRange(bucket.Entries);
+
+        //    allEntries.Sort((a, b) =>
+        //    {
+        //        var distA = Crypto.XorDistance(a.NodeId, targetNodeId);
+        //        var distB = Crypto.XorDistance(b.NodeId, targetNodeId);
+        //        return distA.CompareTo(distB);
+        //    });
+
+        //    return allEntries.GetRange(0, Math.Min(count, allEntries.Count));
+        //}
     }
 
     public class BootstrapNodeConfig
